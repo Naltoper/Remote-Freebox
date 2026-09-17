@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "RemoteTVMamie",
+    "slug": "RemoteTVMamie",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "remotetvmamie",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1d24"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.remotetvmamie.app",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.remotetvmamie.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1d24",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
+      "permissions": ["VIBRATE", "INTERNET"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "RemoteTVMamie",
+      "shortName": "TV Remote",
+      "lang": "fr",
+      "themeColor": "#1a1d24",
+      "backgroundColor": "#1a1d24",
+      "display": "standalone",
+      "orientation": "portrait",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-splash-screen"
+    ]
+  }
+}
