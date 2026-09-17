@@ -48,6 +48,9 @@
     },
     "plugins": [
       "expo-splash-screen"
-    ]
+    ],
+    "experiments": {
+      "baseUrl": ""
+    }
   }
 }

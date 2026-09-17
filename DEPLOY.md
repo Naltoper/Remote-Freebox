@@ -1,122 +1,136 @@
-# Deploy to Vercel
+# Deploy to GitHub Pages (HTTP)
 
-Static Expo Web export (`expo export -p web` → `dist/`). Config lives in `vercel.json`.
+Static Expo Web export (`expo export -p web` → `dist/`), published with `gh-pages`.
 
-## Critical: HTTPS → HTTP Mixed Content
+Project pages URL shape:
 
-Vercel serves the PWA on **HTTPS**. The Freebox API is **HTTP** (`http://192.168.1.49/...`).
+```text
+http://<GITHUB_USER>.github.io/RemoteTVMamie/
+```
 
-Browsers **block** active Mixed Content (HTTPS page calling HTTP). A service worker **cannot** bypass this. Vercel serverless functions also **cannot** reach your home LAN/VPN IP.
-
-| Approach | Works from Vercel HTTPS PWA? | Notes |
-| --- | --- | --- |
-| Direct `fetch` to `http://192.168.1.49` | **No** | Blocked as Mixed Content |
-| Service worker proxy | **No** | Still Mixed Content |
-| Vercel serverless proxy | **No** | Cannot reach private LAN |
-| **Android TWA / Expo native** | **Yes** | Cleartext HTTP allowed in app config |
-| **Host static files on LAN HTTP** | **Yes** | Same-origin or HTTP→HTTP is fine |
-| **HTTPS reverse proxy on LAN/VPN** | **Yes** | Set Settings → Host to `https://…` |
-
-The app detects this case and shows a warning instead of a silent failure.
+`app.json` sets `experiments.baseUrl` to `/RemoteTVMamie`. If your repository name differs, change that value to `/<exact-repo-name>` before deploying.
 
 ---
 
-## 1. One-time: push the repo to GitHub
+## STOP — read before you continue
 
-If the project is not on GitHub yet:
+### 1. No GitHub remote yet
 
-1. Create an empty GitHub repository (e.g. `RemoteTVMamie`).
-2. From this project:
+This project currently has **no `git remote`**. You must create a GitHub repository and connect it (steps below). I cannot do that without your account.
+
+### 2. `*.github.io` often stays HTTPS in browsers
+
+Even if you uncheck **Enforce HTTPS** in GitHub Pages settings:
+
+- Modern browsers treat `github.io` as an **HSTS preload** host.
+- Typing `http://…github.io/…` is frequently **upgraded to HTTPS** by the browser itself.
+- An HTTPS page **cannot** call `http://192.168.1.49` (Mixed Content).
+
+So GitHub Pages on the default `github.io` domain is **unlikely** to give you reliable HTTP→HTTP Freebox control.
+
+| Hosting | Plain HTTP to Freebox? |
+| --- | --- |
+| `https://*.github.io/...` (typical) | No — Mixed Content |
+| `http://*.github.io/...` after disabling Enforce HTTPS | Often still forced to HTTPS by browser HSTS |
+| Custom domain + Enforce HTTPS **off** + no HSTS on that domain | Possible |
+| LAN/NAS/Pi HTTP server (`http://192.168.x.x`) | Yes (recommended for this remote) |
+| Android TWA / Expo native | Yes |
+
+If Freebox control is the goal, prefer a **LAN HTTP host** or **native/TWA**. Use GitHub Pages mainly if you accept HTTPS UI + a different control path, or you have a **non-HSTS custom domain** served over HTTP.
+
+---
+
+## Manual checklist
+
+### A. Create the GitHub repository (you)
+
+1. Open [https://github.com/new](https://github.com/new).
+2. Repository name: **`RemoteTVMamie`** (must match `experiments.baseUrl` unless you change it).
+3. Visibility: Public (required for free GitHub Pages on user/org accounts) or Private if your plan allows Pages.
+4. Do **not** add a README/license (this repo already has files).
+5. Click **Create repository**.
+
+### B. Connect `origin` and push (you — in a terminal)
+
+Replace `<YOUR_USER>` with your GitHub username:
 
 ```bash
+cd /home/roblof/RemoteTVMamie
 git remote add origin https://github.com/<YOUR_USER>/RemoteTVMamie.git
+git branch -M master
 git push -u origin master
 ```
 
----
-
-## 2. Deploy with the Vercel Dashboard (recommended)
-
-1. Open [https://vercel.com](https://vercel.com) and sign in (GitHub account is easiest).
-2. **Add New… → Project**.
-3. **Import** the `RemoteTVMamie` GitHub repository (authorize Vercel if prompted).
-4. Framework Preset: leave as **Other** (or unset). `vercel.json` already sets:
-   - Build Command: `npm run build:web`
-   - Output Directory: `dist`
-5. **Environment variables**: none required for v1 (host/code are in-app Settings / defaults).
-6. Click **Deploy**.
-7. When finished, open the deployment URL (e.g. `https://remotetvmamie.vercel.app`).
-
-Later pushes to the connected branch redeploy automatically.
-
-### Install as PWA (optional)
-
-On a phone browser: open the Vercel URL → browser menu → **Add to Home Screen** / **Install app**.  
-This installs the UI shell only; it does **not** fix Mixed Content against the Freebox HTTP API.
-
----
-
-## 3. Deploy with Vercel CLI (alternative)
+If GitHub asks you to authenticate, complete login (browser / PAT / SSH). Prefer SSH if you already use it:
 
 ```bash
-npm install -g vercel@latest
-# from the project root:
-vercel login
-vercel          # preview deployment
-vercel --prod   # production
+git remote add origin git@github.com:<YOUR_USER>/RemoteTVMamie.git
+git push -u origin master
 ```
 
-Accept the defaults; `vercel.json` supplies build/output settings.
-
----
-
-## 4. Verify the build locally before deploying
+### C. Install deps and deploy Pages branch (you)
 
 ```bash
 npm install
-npm run build:web
-npx serve dist   # or: npm run serve:web after export
+npm run deploy
 ```
 
-Open the local URL and confirm the remote UI loads.
+This runs `expo export -p web` then publishes `dist/` to the `gh-pages` branch with `.nojekyll`.
 
----
+First run may open a GitHub auth prompt for `gh-pages`; complete it.
 
-## 5. Making the remote actually control the Freebox
+### D. Enable GitHub Pages (you — GitHub UI)
 
-Pick **one** of these for day-to-day use (especially over WireGuard):
+1. Open the repo on GitHub → **Settings** → **Pages** (left sidebar).
+2. Under **Build and deployment** → **Source**, choose **Deploy from a branch**.
+3. Branch: **`gh-pages`** / folder: **/ (root)** → **Save**.
+4. Wait 1–2 minutes for the site URL to appear.
 
-### A. Native / TWA (best for a phone on VPN)
+### E. Disable “Enforce HTTPS” (you — GitHub UI)
 
-Build an Android app / Trusted Web Activity that loads this UI (or use Expo native). Cleartext HTTP to `192.168.1.49` is already enabled in `app.json` (`usesCleartextTraffic`).
-
-### B. Host the static export on the LAN over HTTP
-
-Copy `dist/` to a NAS, Raspberry Pi, or Freebox-local web server and open `http://192.168.x.x/...` while on Wi‑Fi or VPN. HTTP page → HTTP Freebox is allowed.
-
-### C. HTTPS reverse proxy on the LAN (keeps using the Vercel UI)
-
-On a machine reachable via VPN, terminate TLS and proxy to the Freebox, e.g. Caddy:
-
-```caddy
-freebox.lan {
-  reverse_proxy http://192.168.1.49
-}
-```
-
-Then in the app **Settings → Host**, set:
+1. Stay on **Settings** → **Pages**.
+2. Find the checkbox **Enforce HTTPS**.
+3. **Uncheck** it and save if prompted.
+4. Test in a private/incognito window:
 
 ```text
-https://freebox.lan
+http://<YOUR_USER>.github.io/RemoteTVMamie/
 ```
 
-(You still need a trusted or device-trusted certificate; CORS may still force `no-cors` opaque mode.)
+5. Confirm the address bar stays on **`http://`** (not upgraded to `https://`).
+   - If it upgrades: browser HSTS — GitHub Pages on `github.io` will not solve Mixed Content for you.
+   - Fallback: host `dist/` on a LAN HTTP server, or use native/TWA (see below).
+
+### F. Smoke-test the remote (you)
+
+1. Connect to home Wi‑Fi or WireGuard VPN.
+2. Open the Pages URL over **HTTP** (if available).
+3. Press **Power** / **OK** and confirm the Freebox reacts.
 
 ---
 
-## Files involved
+## Optional: LAN HTTP hosting (most reliable for Freebox)
 
-- `vercel.json` — build, SPA rewrites, cache headers for PWA assets
-- `package.json` → `build:web`: `expo export -p web`
-- `app.json` → `web.output: "single"`
-- `src/services/freeboxRemote.ts` — Mixed Content guard + optional `https://` host
+```bash
+npm run build:web
+# copy dist/ to any local HTTP server, e.g. on a Pi:
+npx --yes serve -l 8080 dist
+```
+
+Then open `http://<lan-ip>:8080/` while on VPN/LAN.
+
+---
+
+## Scripts reference
+
+| Script | Purpose |
+| --- | --- |
+| `npm run build:web` | `expo export -p web` → `dist/` |
+| `npm run deploy` | build + `gh-pages --nojekyll -d dist` |
+| `npm run serve:web` | serve an existing export locally |
+
+## Config reference
+
+- `app.json` → `experiments.baseUrl`: `/RemoteTVMamie`
+- `package.json` → `predeploy` / `deploy`
+- Mixed Content pre-check removed from `src/services/freeboxRemote.ts` (HTTP hosting assumed)

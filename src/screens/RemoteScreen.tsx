@@ -8,7 +8,6 @@ import { NumberPad } from '../components/NumberPad';
 import { RemoteButton } from '../components/RemoteButton';
 import { VolumeChannelPad } from '../components/VolumeChannelPad';
 import { useSettings } from '../context/SettingsContext';
-import { isMixedContentRisk } from '../services/freeboxRemote';
 import { colors } from '../theme/colors';
 
 type RemoteScreenProps = {
@@ -20,7 +19,6 @@ export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState<boolean | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mixedContent = isMixedContentRisk(config);
 
   useEffect(() => {
     return () => {
@@ -48,11 +46,6 @@ export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
         <Header
           title="Freebox Remote"
           subtitle={config.host}
-          warningMessage={
-            mixedContent
-              ? 'HTTPS page cannot reach Freebox over HTTP (browser Mixed Content). Use native/TWA, local HTTP hosting, or an HTTPS LAN proxy — see DEPLOY.md.'
-              : null
-          }
           statusMessage={statusMessage}
           statusOk={statusOk}
           onOpenSettings={onOpenSettings}

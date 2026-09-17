@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "gh-pages": "^6.3.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -26,7 +27,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export -p web",
-    "serve:web": "expo serve"
+    "serve:web": "expo serve",
+    "predeploy": "npm run build:web",
+    "deploy": "gh-pages --nojekyll -d dist"
   },
   "private": true
 }

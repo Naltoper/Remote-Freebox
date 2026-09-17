@@ -19,43 +19,35 @@ npm run build:web # static export → dist/
 npm start         # Expo Dev Tools
 ```
 
-## Deploy (Vercel)
+## Deploy (GitHub Pages)
 
-See **[DEPLOY.md](./DEPLOY.md)** for Vercel Dashboard / CLI steps and the HTTPS Mixed Content constraints.
+See **[DEPLOY.md](./DEPLOY.md)** for the full checklist (create repo, push, `npm run deploy`, disable Enforce HTTPS).
 
 ```bash
-npm run build:web
-# then connect the GitHub repo in Vercel, or: npx vercel
+npm run deploy
 ```
+
+> **Important:** `*.github.io` is often forced to HTTPS by browsers (HSTS), which reintroduces Mixed Content toward the Freebox HTTP API. Prefer LAN HTTP hosting or native/TWA if control fails — details in `DEPLOY.md`.
 
 ## Project layout
 
 ```text
 App.tsx
-vercel.json                     # Vercel static export + headers
 src/
-  config/defaults.ts            # default host / code / timeout
-  context/SettingsContext.tsx   # AsyncStorage-backed settings
-  services/freeboxRemote.ts     # fetch + timeout / no-cors / mixed-content guard
+  config/defaults.ts
+  context/SettingsContext.tsx
+  services/freeboxRemote.ts
   components/
-    RemoteButton.tsx
-    ControlPad.tsx
-    Header.tsx
-    NumberPad.tsx
-    VolumeChannelPad.tsx
   screens/
-    RemoteScreen.tsx
-    SettingsScreen.tsx
   theme/colors.ts
 public/
-  manifest.json                 # PWA manifest
+  manifest.json
   index.html
 ```
 
 ## Notes
 
-- **Mixed Content (Vercel HTTPS)**: browsers block `https://…vercel.app` from calling `http://192.168…`. Use native/TWA, local HTTP hosting, or an HTTPS LAN proxy — details in `DEPLOY.md`.
-- **Web / CORS**: Freebox replies without CORS headers. On web the client uses `fetch(..., { mode: 'no-cors' })` so the request is still sent (opaque response) when Mixed Content does not apply.
-- **Native / TWA**: cleartext HTTP is allowed (`usesCleartextTraffic` / ATS local networking).
-- **Feedback**: `expo-haptics` on press + brief status banner on success/failure.
-- **Config**: gear icon → Settings to change IP, remote code, and timeout.
+- **HTTP hosting**: intended so the UI can call `http://192.168…` without Mixed Content.
+- **Web / CORS**: Freebox typically has no CORS headers; web uses `fetch(..., { mode: 'no-cors' })` (opaque response).
+- **Native / TWA**: cleartext HTTP allowed (`usesCleartextTraffic` / ATS local networking).
+- **Config**: gear icon → Settings for IP, remote code, timeout.
