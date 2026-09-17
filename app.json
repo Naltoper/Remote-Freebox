@@ -43,7 +43,8 @@
       "backgroundColor": "#1a1d24",
       "display": "standalone",
       "orientation": "portrait",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
       "expo-splash-screen"

@@ -72,7 +72,10 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
         >
           <Text style={styles.hint}>
             Player IP and remote code for Freebox `/pub/remote_control`. Use the
-            LAN address or the WireGuard VPN IP.
+            LAN address or the WireGuard VPN IP. On an HTTPS host (e.g. Vercel),
+            plain `http://192.168…` is blocked by the browser — either use a
+            native/TWA build, host this app over local HTTP, or set Host to an
+            HTTPS reverse-proxy origin such as `https://freebox.lan:8443`.
           </Text>
 
           <View style={styles.field}>
