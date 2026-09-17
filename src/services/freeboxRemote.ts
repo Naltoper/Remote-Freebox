@@ -3,15 +3,13 @@ import { Platform } from 'react-native';
 import type { CommandResult, FreeboxConfig, FreeboxKey } from '../types/remote';
 
 /**
- * Builds the Freebox remote URL.
- * `host` may be an IP (`192.168.1.49`) or a full origin (`https://freebox.lan:8443`).
+ * Builds the Freebox remote-control URL.
+ * Bare hosts (e.g. `192.168.1.49`) always use plain `http://`.
+ * A full origin is only kept when the user explicitly sets `http://` or `https://`.
  */
 function buildUrl(config: FreeboxConfig, key: FreeboxKey): string {
-  const raw = config.host.trim();
-  const hasScheme = /^https?:\/\//i.test(raw);
-  const origin = hasScheme
-    ? raw.replace(/\/$/, '')
-    : `http://${raw.replace(/\/$/, '')}`;
+  const raw = config.host.trim().replace(/\/$/, '');
+  const origin = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
 
   const params = new URLSearchParams({
     code: config.code,
@@ -21,12 +19,10 @@ function buildUrl(config: FreeboxConfig, key: FreeboxKey): string {
 }
 
 /**
- * Sends a Freebox remote key via HTTP(S) GET.
+ * Sends a Freebox remote key via HTTP GET.
  *
- * Intended for HTTP-hosted UI (LAN server or GitHub Pages without HTTPS) so the
- * browser can call `http://192.168.x.x` without Mixed Content. On web, Freebox
- * typically has no CORS headers, so we use `no-cors` (opaque response). On
- * native / TWA, standard fetch expects HTTP 200 + body `"OK"`.
+ * Native Android/iOS: standard `fetch` (cleartext allowed via app.json).
+ * Web only: `no-cors` because Freebox does not send CORS headers.
  */
 export async function sendRemoteKey(
   config: FreeboxConfig,
@@ -44,7 +40,6 @@ export async function sendRemoteKey(
         signal: controller.signal,
         cache: 'no-store',
       });
-      // Opaque response: request was dispatched; body/status are unreadable.
       return { ok: true, opaque: true };
     }
 
@@ -55,10 +50,7 @@ export async function sendRemoteKey(
     });
 
     if (!response.ok) {
-      return {
-        ok: false,
-        error: `HTTP ${response.status}`,
-      };
+      return { ok: false, error: `HTTP ${response.status}` };
     }
 
     const body = (await response.text()).trim();

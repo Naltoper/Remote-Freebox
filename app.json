@@ -23,7 +23,7 @@
       }
     },
     "android": {
-      "package": "com.remotetvmamie.app",
+      "package": "com.naltoper.remotefreebox",
       "adaptiveIcon": {
         "backgroundColor": "#1a1d24",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -48,9 +48,6 @@
     },
     "plugins": [
       "expo-splash-screen"
-    ],
-    "experiments": {
-      "baseUrl": ""
-    }
+    ]
   }
 }

@@ -71,10 +71,9 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.hint}>
-            Player IP and remote code for Freebox `/pub/remote_control`. Use the
-            LAN address or the WireGuard VPN IP. Prefer hosting this app over
-            plain HTTP (LAN server or GitHub Pages with HTTPS enforcement off)
-            so the browser can call `http://192.168…` without Mixed Content.
+            Freebox Player address for `/pub/remote_control`. Use the LAN IP or
+            WireGuard VPN IP (default `192.168.1.49`). The Android app sends
+            plain HTTP — connect to the same network or VPN as the Player.
           </Text>
 
           <View style={styles.field}>

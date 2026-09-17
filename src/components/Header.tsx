@@ -7,7 +7,6 @@ type HeaderProps = {
   subtitle?: string;
   statusMessage?: string | null;
   statusOk?: boolean | null;
-  warningMessage?: string | null;
   onOpenSettings: () => void;
 };
 
@@ -16,7 +15,6 @@ export function Header({
   subtitle,
   statusMessage,
   statusOk,
-  warningMessage,
   onOpenSettings,
 }: HeaderProps) {
   return (
@@ -35,13 +33,6 @@ export function Header({
           <Text style={styles.settingsIcon}>⚙</Text>
         </Pressable>
       </View>
-      {warningMessage ? (
-        <View style={[styles.status, styles.statusError]}>
-          <Text style={[styles.statusText, styles.statusTextError]} numberOfLines={4}>
-            {warningMessage}
-          </Text>
-        </View>
-      ) : null}
       {statusMessage ? (
         <View
           style={[
