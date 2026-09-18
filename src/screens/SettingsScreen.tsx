@@ -192,10 +192,10 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           <Text style={styles.section}>Démarrage intelligent auto</Text>
           <Text style={styles.hint}>
             Dans la plage (ex. 19:00 → 10:00) : maintient le Player allumé sur le
-            menu (Power + 20s sans OK, ou Home). Hors plage : exécute le
-            démarrage intelligent complet (Power → 20s → OK). Sur Android, une
-            notification persistante (Foreground Service) assure la
-            surveillance.
+            menu (Power + 20s sans OK, ou Home). Hors plage : démarrage
+            intelligent complet (Power → 20s → OK). La surveillance tourne via un
+            timer in-app + tâche système (pas de Foreground Service natif, pour
+            éviter les crashs Android).
           </Text>
 
           {(saveWarning || lastAutomationWarning) && (
@@ -267,8 +267,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           {Platform.OS === 'android' ? (
             <Text style={styles.statusLine}>
-              Service premier plan :{' '}
-              {fgRunning || autoEnabled ? 'actif / demandé' : 'arrêté'}
+              Surveillance : {fgRunning || autoEnabled ? 'active' : 'arrêtée'}
             </Text>
           ) : null}
 
