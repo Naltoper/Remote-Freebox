@@ -34,7 +34,12 @@
       "usesCleartextTraffic": true,
       "permissions": [
         "VIBRATE",
-        "INTERNET"
+        "INTERNET",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_DATA_SYNC",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -59,7 +64,9 @@
           }
         }
       ],
-      "./plugins/withCleartextTraffic.js"
+      "./plugins/withCleartextTraffic.js",
+      "expo-background-task",
+      "expo-notifications"
     ]
   }
 }

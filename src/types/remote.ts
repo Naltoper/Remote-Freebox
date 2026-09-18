@@ -33,3 +33,16 @@ export type FreeboxConfig = {
   code: string;
   timeoutMs: number;
 };
+
+/** Scheduled smart-start automation (overnight window crosses midnight). */
+export type AutomationSettings = {
+  enabled: boolean;
+  /** HH:mm local time — start of active window (e.g. 19:00). */
+  windowStart: string;
+  /** HH:mm local time — end of active window (e.g. 10:00 next day). */
+  windowEnd: string;
+  /** Minutes between checks while inside the active window. */
+  intervalMinutes: number;
+  /** Minutes between light checks outside the active window (no wake). */
+  offWindowIntervalMinutes: number;
+};

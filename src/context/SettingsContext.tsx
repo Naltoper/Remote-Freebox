@@ -9,13 +9,29 @@ import {
   type ReactNode,
 } from 'react';
 
-import { DEFAULT_CONFIG, STORAGE_KEYS } from '../config/defaults';
-import type { FreeboxConfig } from '../types/remote';
+import {
+  DEFAULT_AUTOMATION,
+  DEFAULT_CONFIG,
+  STORAGE_KEYS,
+} from '../config/defaults';
+import {
+  loadAutomationSettings,
+  persistAutomationSettings,
+} from '../services/automation';
+import { syncAutomationRuntime } from '../services/backgroundAutomation';
+import type { AutomationSettings, FreeboxConfig } from '../types/remote';
+import {
+  clampIntervalMinutes,
+  formatHm,
+  parseHmToMinutes,
+} from '../utils/timeWindow';
 
 type SettingsContextValue = {
   config: FreeboxConfig;
+  automation: AutomationSettings;
   loaded: boolean;
   updateConfig: (partial: Partial<FreeboxConfig>) => Promise<void>;
+  updateAutomation: (partial: Partial<AutomationSettings>) => Promise<void>;
   resetConfig: () => Promise<void>;
 };
 
@@ -48,17 +64,52 @@ async function persistConfig(config: FreeboxConfig): Promise<void> {
   ]);
 }
 
+function normalizeAutomation(
+  partial: Partial<AutomationSettings>,
+  base: AutomationSettings,
+): AutomationSettings {
+  const windowStartRaw = partial.windowStart ?? base.windowStart;
+  const windowEndRaw = partial.windowEnd ?? base.windowEnd;
+  const windowStart =
+    parseHmToMinutes(windowStartRaw) != null
+      ? formatHm(windowStartRaw)
+      : base.windowStart;
+  const windowEnd =
+    parseHmToMinutes(windowEndRaw) != null
+      ? formatHm(windowEndRaw)
+      : base.windowEnd;
+
+  return {
+    enabled: partial.enabled ?? base.enabled,
+    windowStart,
+    windowEnd,
+    intervalMinutes: clampIntervalMinutes(
+      partial.intervalMinutes ?? base.intervalMinutes,
+      DEFAULT_AUTOMATION.intervalMinutes,
+    ),
+    offWindowIntervalMinutes: clampIntervalMinutes(
+      partial.offWindowIntervalMinutes ?? base.offWindowIntervalMinutes,
+      DEFAULT_AUTOMATION.offWindowIntervalMinutes,
+    ),
+  };
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<FreeboxConfig>(DEFAULT_CONFIG);
+  const [automation, setAutomation] =
+    useState<AutomationSettings>(DEFAULT_AUTOMATION);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadConfig()
-      .then((next) => {
-        if (!cancelled) {
-          setConfig(next);
-          setLoaded(true);
+    Promise.all([loadConfig(), loadAutomationSettings()])
+      .then(([nextConfig, nextAutomation]) => {
+        if (cancelled) return;
+        setConfig(nextConfig);
+        setAutomation(nextAutomation);
+        setLoaded(true);
+        if (nextAutomation.enabled) {
+          void syncAutomationRuntime(true);
         }
       })
       .catch(() => {
@@ -77,14 +128,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const updateAutomation = useCallback(
+    async (partial: Partial<AutomationSettings>) => {
+      const nextSettings = normalizeAutomation(partial, automation);
+      setAutomation(nextSettings);
+      await persistAutomationSettings(nextSettings);
+      await syncAutomationRuntime(nextSettings.enabled);
+    },
+    [automation],
+  );
+
   const resetConfig = useCallback(async () => {
     setConfig(DEFAULT_CONFIG);
+    setAutomation(DEFAULT_AUTOMATION);
     await persistConfig(DEFAULT_CONFIG);
+    await persistAutomationSettings(DEFAULT_AUTOMATION);
+    await syncAutomationRuntime(false);
   }, []);
 
   const value = useMemo(
-    () => ({ config, loaded, updateConfig, resetConfig }),
-    [config, loaded, updateConfig, resetConfig],
+    () => ({
+      config,
+      automation,
+      loaded,
+      updateConfig,
+      updateAutomation,
+      resetConfig,
+    }),
+    [config, automation, loaded, updateConfig, updateAutomation, resetConfig],
   );
 
   return (

@@ -5,14 +5,16 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DEFAULT_CONFIG } from '../config/defaults';
+import { DEFAULT_AUTOMATION, DEFAULT_CONFIG } from '../config/defaults';
 import { useSettings } from '../context/SettingsContext';
+import { isForegroundServiceRunning } from '../services/backgroundAutomation';
 import { colors } from '../theme/colors';
 
 type SettingsScreenProps = {
@@ -20,11 +22,22 @@ type SettingsScreenProps = {
 };
 
 export function SettingsScreen({ onClose }: SettingsScreenProps) {
-  const { config, updateConfig, resetConfig } = useSettings();
+  const { config, automation, updateConfig, updateAutomation, resetConfig } =
+    useSettings();
   const [host, setHost] = useState(config.host);
   const [code, setCode] = useState(config.code);
   const [timeoutMs, setTimeoutMs] = useState(String(config.timeoutMs));
+  const [windowStart, setWindowStart] = useState(automation.windowStart);
+  const [windowEnd, setWindowEnd] = useState(automation.windowEnd);
+  const [intervalMinutes, setIntervalMinutes] = useState(
+    String(automation.intervalMinutes),
+  );
+  const [offWindowIntervalMinutes, setOffWindowIntervalMinutes] = useState(
+    String(automation.offWindowIntervalMinutes),
+  );
+  const [autoEnabled, setAutoEnabled] = useState(automation.enabled);
   const [saved, setSaved] = useState(false);
+  const [fgRunning, setFgRunning] = useState(false);
 
   useEffect(() => {
     setHost(config.host);
@@ -32,8 +45,20 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setTimeoutMs(String(config.timeoutMs));
   }, [config]);
 
+  useEffect(() => {
+    setWindowStart(automation.windowStart);
+    setWindowEnd(automation.windowEnd);
+    setIntervalMinutes(String(automation.intervalMinutes));
+    setOffWindowIntervalMinutes(String(automation.offWindowIntervalMinutes));
+    setAutoEnabled(automation.enabled);
+    setFgRunning(isForegroundServiceRunning());
+  }, [automation]);
+
   const handleSave = async () => {
     const parsedTimeout = Number(timeoutMs);
+    const parsedInterval = Number(intervalMinutes);
+    const parsedOffInterval = Number(offWindowIntervalMinutes);
+
     await updateConfig({
       host: host.trim() || DEFAULT_CONFIG.host,
       code: code.trim() || DEFAULT_CONFIG.code,
@@ -42,6 +67,20 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           ? parsedTimeout
           : DEFAULT_CONFIG.timeoutMs,
     });
+
+    await updateAutomation({
+      enabled: autoEnabled,
+      windowStart: windowStart.trim() || DEFAULT_AUTOMATION.windowStart,
+      windowEnd: windowEnd.trim() || DEFAULT_AUTOMATION.windowEnd,
+      intervalMinutes: Number.isFinite(parsedInterval)
+        ? parsedInterval
+        : DEFAULT_AUTOMATION.intervalMinutes,
+      offWindowIntervalMinutes: Number.isFinite(parsedOffInterval)
+        ? parsedOffInterval
+        : DEFAULT_AUTOMATION.offWindowIntervalMinutes,
+    });
+
+    setFgRunning(isForegroundServiceRunning());
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -51,6 +90,14 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setHost(DEFAULT_CONFIG.host);
     setCode(DEFAULT_CONFIG.code);
     setTimeoutMs(String(DEFAULT_CONFIG.timeoutMs));
+    setWindowStart(DEFAULT_AUTOMATION.windowStart);
+    setWindowEnd(DEFAULT_AUTOMATION.windowEnd);
+    setIntervalMinutes(String(DEFAULT_AUTOMATION.intervalMinutes));
+    setOffWindowIntervalMinutes(
+      String(DEFAULT_AUTOMATION.offWindowIntervalMinutes),
+    );
+    setAutoEnabled(DEFAULT_AUTOMATION.enabled);
+    setFgRunning(false);
   };
 
   return (
@@ -61,9 +108,9 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
       >
         <View style={styles.header}>
           <Pressable onPress={onClose} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>← Retour</Text>
           </Pressable>
-          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.title}>Réglages</Text>
         </View>
 
         <ScrollView
@@ -71,13 +118,12 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.hint}>
-            Freebox Player address for `/pub/remote_control`. Use the LAN IP or
-            WireGuard VPN IP (default `192.168.1.49`). The Android app sends
-            plain HTTP — connect to the same network or VPN as the Player.
+            Adresse du Freebox Player pour `/pub/remote_control`. Utilisez l’IP
+            LAN ou VPN WireGuard (défaut `192.168.1.49`).
           </Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Player host / IP</Text>
+            <Text style={styles.label}>Hôte / IP du Player</Text>
             <TextInput
               value={host}
               onChangeText={setHost}
@@ -91,7 +137,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Remote code</Text>
+            <Text style={styles.label}>Code télécommande</Text>
             <TextInput
               value={code}
               onChangeText={setCode}
@@ -116,18 +162,99 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
             />
           </View>
 
+          <Text style={styles.section}>Démarrage intelligent auto</Text>
+          <Text style={styles.hint}>
+            Plage active (ex. 19:00 → 10:00) : vérifie et lance la macro
+            (Power/Home + OK). Hors plage : contrôle léger uniquement, sans
+            allumer le Player. Sur Android, une notification persistante
+            (Foreground Service) maintient la surveillance.
+          </Text>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Activer l’automatisation</Text>
+            <Switch
+              value={autoEnabled}
+              onValueChange={setAutoEnabled}
+              trackColor={{ false: colors.border, true: colors.ok }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={styles.rowFields}>
+            <View style={[styles.field, styles.half]}>
+              <Text style={styles.label}>Début (HH:mm)</Text>
+              <TextInput
+                value={windowStart}
+                onChangeText={setWindowStart}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={DEFAULT_AUTOMATION.windowStart}
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
+            </View>
+            <View style={[styles.field, styles.half]}>
+              <Text style={styles.label}>Fin (HH:mm)</Text>
+              <TextInput
+                value={windowEnd}
+                onChangeText={setWindowEnd}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={DEFAULT_AUTOMATION.windowEnd}
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Intervalle dans la plage (min)</Text>
+            <TextInput
+              value={intervalMinutes}
+              onChangeText={setIntervalMinutes}
+              keyboardType="number-pad"
+              placeholder={String(DEFAULT_AUTOMATION.intervalMinutes)}
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Intervalle hors plage (min)</Text>
+            <TextInput
+              value={offWindowIntervalMinutes}
+              onChangeText={setOffWindowIntervalMinutes}
+              keyboardType="number-pad"
+              placeholder={String(DEFAULT_AUTOMATION.offWindowIntervalMinutes)}
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+
+          {Platform.OS === 'android' ? (
+            <Text style={styles.statusLine}>
+              Service premier plan :{' '}
+              {fgRunning || autoEnabled ? 'actif / demandé' : 'arrêté'}
+            </Text>
+          ) : null}
+
           <Pressable
             onPress={handleSave}
             style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
           >
-            <Text style={styles.primaryText}>{saved ? 'Saved' : 'Save'}</Text>
+            <Text style={styles.primaryText}>
+              {saved ? 'Enregistré' : 'Enregistrer'}
+            </Text>
           </Pressable>
 
           <Pressable
             onPress={handleReset}
-            style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.secondaryBtn,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.secondaryText}>Reset to defaults</Text>
+            <Text style={styles.secondaryText}>Réinitialiser</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -171,6 +298,13 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  section: {
+    marginTop: 8,
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   hint: {
     color: colors.textMuted,
     fontSize: 14,
@@ -178,6 +312,20 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 8,
+  },
+  half: {
+    flex: 1,
+  },
+  rowFields: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
   },
   label: {
     color: colors.text,
@@ -193,6 +341,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: colors.text,
     fontSize: 16,
+  },
+  statusLine: {
+    color: colors.textMuted,
+    fontSize: 13,
   },
   primaryBtn: {
     marginTop: 8,
