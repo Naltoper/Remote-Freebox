@@ -1,7 +1,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import { AppState } from 'react-native';
+import { Platform } from 'react-native';
 import BackgroundService from 'react-native-background-actions';
 
 import {
@@ -20,15 +20,19 @@ declare global {
 }
 
 if (!globalThis.__smartStartTaskDefined) {
-  TaskManager.defineTask(SMART_START_BACKGROUND_TASK, async () => {
-    try {
-      await runScheduledAutomation();
-      return BackgroundTask.BackgroundTaskResult.Success;
-    } catch (error) {
-      console.warn('[SmartStart] background task failed', error);
-      return BackgroundTask.BackgroundTaskResult.Failed;
-    }
-  });
+  try {
+    TaskManager.defineTask(SMART_START_BACKGROUND_TASK, async () => {
+      try {
+        await runScheduledAutomation();
+        return BackgroundTask.BackgroundTaskResult.Success;
+      } catch (error) {
+        console.warn('[SmartStart] background task failed', error);
+        return BackgroundTask.BackgroundTaskResult.Failed;
+      }
+    });
+  } catch (error) {
+    console.warn('[SmartStart] defineTask failed', error);
+  }
   globalThis.__smartStartTaskDefined = true;
 }
 
@@ -37,57 +41,130 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function resolveLoopDelayMs(): Promise<number> {
-  const automation = await loadAutomationSettings();
-  const inWindow = isInTimeWindow(
-    new Date(),
-    automation.windowStart,
-    automation.windowEnd,
-  );
-  const minutes = inWindow
-    ? automation.intervalMinutes
-    : automation.offWindowIntervalMinutes;
-  return Math.max(minutes, 1) * 60 * 1000;
+  try {
+    const automation = await loadAutomationSettings();
+    const inWindow = isInTimeWindow(
+      new Date(),
+      automation.windowStart,
+      automation.windowEnd,
+    );
+    const minutes = inWindow
+      ? automation.intervalMinutes
+      : automation.offWindowIntervalMinutes;
+    return Math.max(minutes, 1) * 60 * 1000;
+  } catch {
+    return 15 * 60 * 1000;
+  }
 }
 
 const foregroundLoop = async () => {
+  // First pass after a short delay so the UI / save can settle.
+  await sleep(3000);
   while (BackgroundService.isRunning()) {
     try {
       await runScheduledAutomation();
     } catch (error) {
       console.warn('[SmartStart] foreground loop error', error);
     }
-    const delayMs = await resolveLoopDelayMs();
-    await sleep(delayMs);
+    try {
+      const delayMs = await resolveLoopDelayMs();
+      await sleep(delayMs);
+    } catch {
+      await sleep(15 * 60 * 1000);
+    }
   }
 };
 
-async function startAndroidForegroundService(): Promise<void> {
-  if (BackgroundService.isRunning()) return;
-
+async function ensureNotificationSetup(): Promise<{
+  ok: boolean;
+  warning?: string;
+}> {
   try {
-    await Notifications.requestPermissionsAsync();
-  } catch {
-    // Notification permission is best-effort for the sticky FS notification.
-  }
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync(
+        'RN_BACKGROUND_ACTIONS_CHANNEL',
+        {
+          name: 'Surveillance Freebox',
+          importance: Notifications.AndroidImportance.LOW,
+          vibrationPattern: [0],
+          enableVibrate: false,
+          showBadge: false,
+        },
+      );
+    }
 
-  await BackgroundService.start(foregroundLoop, {
-    taskName: SMART_START_FOREGROUND_TASK,
-    taskTitle: 'Surveillance Freebox',
-    taskDesc: 'Automatisation Démarrage intelligent active',
-    taskIcon: {
-      name: 'ic_launcher',
-      type: 'mipmap',
-    },
-    color: '#e8a317',
-    linkingURI: 'remotetvmamie://',
-    foregroundServiceType: ['dataSync'],
-    parameters: {},
-  });
+    const permissions = await Notifications.getPermissionsAsync();
+    let status = permissions.status;
+    if (status !== 'granted') {
+      const requested = await Notifications.requestPermissionsAsync();
+      status = requested.status;
+    }
+
+    if (status !== 'granted') {
+      return {
+        ok: false,
+        warning:
+          'Permission notification refusée — le service de premier plan peut échouer.',
+      };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.warn('[SmartStart] notification setup failed', error);
+    return {
+      ok: false,
+      warning: 'Impossible de préparer les notifications.',
+    };
+  }
+}
+
+async function startAndroidForegroundService(): Promise<{
+  started: boolean;
+  warning?: string;
+}> {
+  try {
+    if (BackgroundService.isRunning()) {
+      return { started: true };
+    }
+
+    const notif = await ensureNotificationSetup();
+
+    await BackgroundService.start(foregroundLoop, {
+      taskName: SMART_START_FOREGROUND_TASK,
+      taskTitle: 'Surveillance Freebox',
+      taskDesc: 'Automatisation Démarrage intelligent active',
+      taskIcon: {
+        name: 'ic_launcher',
+        type: 'mipmap',
+      },
+      color: '#e8a317',
+      linkingURI: 'remotetvmamie://',
+      foregroundServiceType: ['dataSync'],
+      parameters: {},
+    });
+
+    return {
+      started: true,
+      warning: notif.ok ? undefined : notif.warning,
+    };
+  } catch (error) {
+    console.warn('[SmartStart] Foreground Service start failed', error);
+    return {
+      started: false,
+      warning:
+        error instanceof Error
+          ? `Service premier plan indisponible: ${error.message}`
+          : 'Service premier plan indisponible.',
+    };
+  }
 }
 
 async function stopAndroidForegroundService(): Promise<void> {
-  if (!BackgroundService.isRunning()) return;
-  await BackgroundService.stop();
+  try {
+    if (!BackgroundService.isRunning()) return;
+    await BackgroundService.stop();
+  } catch (error) {
+    console.warn('[SmartStart] Foreground Service stop failed', error);
+  }
 }
 
 async function registerExpoBackgroundTask(): Promise<void> {
@@ -111,51 +188,89 @@ async function registerExpoBackgroundTask(): Promise<void> {
 }
 
 async function unregisterExpoBackgroundTask(): Promise<void> {
-  const isRegistered = await TaskManager.isTaskRegisteredAsync(
-    SMART_START_BACKGROUND_TASK,
-  );
-  if (isRegistered) {
-    await BackgroundTask.unregisterTaskAsync(SMART_START_BACKGROUND_TASK);
+  try {
+    const isRegistered = await TaskManager.isTaskRegisteredAsync(
+      SMART_START_BACKGROUND_TASK,
+    );
+    if (isRegistered) {
+      await BackgroundTask.unregisterTaskAsync(SMART_START_BACKGROUND_TASK);
+    }
+  } catch (error) {
+    console.warn('[SmartStart] unregister background task failed', error);
   }
 }
 
+export type AutomationRuntimeResult = {
+  ok: boolean;
+  warning?: string;
+};
+
 /**
- * Android: sticky Foreground Service (24/7 loop) + Expo BackgroundTask fallback.
+ * Android: sticky Foreground Service + Expo BackgroundTask fallback.
+ * Never throws — callers can safely await this on save / app start.
  */
-export async function startAutomationRuntime(): Promise<void> {
-  const automation = await loadAutomationSettings();
-  if (!automation.enabled) {
-    await stopAutomationRuntime();
-    return;
-  }
-
-  await startAndroidForegroundService();
-
+export async function startAutomationRuntime(): Promise<AutomationRuntimeResult> {
   try {
-    await registerExpoBackgroundTask();
-  } catch (error) {
-    console.warn('[SmartStart] could not register background task', error);
-  }
+    const automation = await loadAutomationSettings();
+    if (!automation.enabled) {
+      await stopAutomationRuntime();
+      return { ok: true };
+    }
 
-  if (AppState.currentState === 'active') {
-    void runScheduledAutomation();
+    const fg = await startAndroidForegroundService();
+
+    try {
+      await registerExpoBackgroundTask();
+    } catch (error) {
+      console.warn('[SmartStart] could not register background task', error);
+    }
+
+    // Do not run the heavy macro synchronously here — the FS loop starts after 3s.
+    return {
+      ok: fg.started,
+      warning: fg.warning,
+    };
+  } catch (error) {
+    console.warn('[SmartStart] startAutomationRuntime failed', error);
+    return {
+      ok: false,
+      warning:
+        error instanceof Error
+          ? error.message
+          : 'Échec du démarrage de l’automatisation',
+    };
   }
 }
 
 export async function stopAutomationRuntime(): Promise<void> {
-  await stopAndroidForegroundService();
   try {
+    await stopAndroidForegroundService();
     await unregisterExpoBackgroundTask();
-  } catch {
-    // ignore
+  } catch (error) {
+    console.warn('[SmartStart] stopAutomationRuntime failed', error);
   }
 }
 
-export async function syncAutomationRuntime(enabled: boolean): Promise<void> {
-  if (enabled) {
-    await startAutomationRuntime();
-  } else {
+export async function syncAutomationRuntime(
+  enabled: boolean,
+): Promise<AutomationRuntimeResult> {
+  try {
+    if (enabled) {
+      // Let AsyncStorage / UI settle before touching native services.
+      await sleep(400);
+      return await startAutomationRuntime();
+    }
     await stopAutomationRuntime();
+    return { ok: true };
+  } catch (error) {
+    console.warn('[SmartStart] syncAutomationRuntime failed', error);
+    return {
+      ok: false,
+      warning:
+        error instanceof Error
+          ? error.message
+          : 'Échec synchronisation automatisation',
+    };
   }
 }
 

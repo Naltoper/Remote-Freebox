@@ -22,8 +22,15 @@ type SettingsScreenProps = {
 };
 
 export function SettingsScreen({ onClose }: SettingsScreenProps) {
-  const { config, automation, updateConfig, updateAutomation, resetConfig } =
-    useSettings();
+  const {
+    config,
+    automation,
+    updateConfig,
+    updateAutomation,
+    resetConfig,
+    lastAutomationWarning,
+    clearAutomationWarning,
+  } = useSettings();
   const [host, setHost] = useState(config.host);
   const [code, setCode] = useState(config.code);
   const [timeoutMs, setTimeoutMs] = useState(String(config.timeoutMs));
@@ -38,6 +45,8 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
   const [autoEnabled, setAutoEnabled] = useState(automation.enabled);
   const [saved, setSaved] = useState(false);
   const [fgRunning, setFgRunning] = useState(false);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setHost(config.host);
@@ -55,34 +64,52 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
   }, [automation]);
 
   const handleSave = async () => {
-    const parsedTimeout = Number(timeoutMs);
-    const parsedInterval = Number(intervalMinutes);
-    const parsedOffInterval = Number(offWindowIntervalMinutes);
+    if (saving) return;
+    setSaving(true);
+    setSaveWarning(null);
+    clearAutomationWarning();
 
-    await updateConfig({
-      host: host.trim() || DEFAULT_CONFIG.host,
-      code: code.trim() || DEFAULT_CONFIG.code,
-      timeoutMs:
-        Number.isFinite(parsedTimeout) && parsedTimeout >= 500
-          ? parsedTimeout
-          : DEFAULT_CONFIG.timeoutMs,
-    });
+    try {
+      const parsedTimeout = Number(timeoutMs);
+      const parsedInterval = Number(intervalMinutes);
+      const parsedOffInterval = Number(offWindowIntervalMinutes);
 
-    await updateAutomation({
-      enabled: autoEnabled,
-      windowStart: windowStart.trim() || DEFAULT_AUTOMATION.windowStart,
-      windowEnd: windowEnd.trim() || DEFAULT_AUTOMATION.windowEnd,
-      intervalMinutes: Number.isFinite(parsedInterval)
-        ? parsedInterval
-        : DEFAULT_AUTOMATION.intervalMinutes,
-      offWindowIntervalMinutes: Number.isFinite(parsedOffInterval)
-        ? parsedOffInterval
-        : DEFAULT_AUTOMATION.offWindowIntervalMinutes,
-    });
+      await updateConfig({
+        host: host.trim() || DEFAULT_CONFIG.host,
+        code: code.trim() || DEFAULT_CONFIG.code,
+        timeoutMs:
+          Number.isFinite(parsedTimeout) && parsedTimeout >= 500
+            ? parsedTimeout
+            : DEFAULT_CONFIG.timeoutMs,
+      });
 
-    setFgRunning(isForegroundServiceRunning());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+      const runtime = await updateAutomation({
+        enabled: autoEnabled,
+        windowStart: windowStart.trim() || DEFAULT_AUTOMATION.windowStart,
+        windowEnd: windowEnd.trim() || DEFAULT_AUTOMATION.windowEnd,
+        intervalMinutes: Number.isFinite(parsedInterval)
+          ? parsedInterval
+          : DEFAULT_AUTOMATION.intervalMinutes,
+        offWindowIntervalMinutes: Number.isFinite(parsedOffInterval)
+          ? parsedOffInterval
+          : DEFAULT_AUTOMATION.offWindowIntervalMinutes,
+      });
+
+      setFgRunning(isForegroundServiceRunning());
+      if (runtime.warning) {
+        setSaveWarning(runtime.warning);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (error) {
+      setSaveWarning(
+        error instanceof Error
+          ? error.message
+          : 'Erreur lors de l’enregistrement',
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = async () => {
@@ -164,11 +191,18 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           <Text style={styles.section}>Démarrage intelligent auto</Text>
           <Text style={styles.hint}>
-            Plage active (ex. 19:00 → 10:00) : vérifie et lance la macro
-            (Power/Home + OK). Hors plage : contrôle léger uniquement, sans
-            allumer le Player. Sur Android, une notification persistante
-            (Foreground Service) maintient la surveillance.
+            Dans la plage (ex. 19:00 → 10:00) : maintient le Player allumé sur le
+            menu (Power + 20s sans OK, ou Home). Hors plage : exécute le
+            démarrage intelligent complet (Power → 20s → OK). Sur Android, une
+            notification persistante (Foreground Service) assure la
+            surveillance.
           </Text>
+
+          {(saveWarning || lastAutomationWarning) && (
+            <Text style={styles.warningText}>
+              {saveWarning || lastAutomationWarning}
+            </Text>
+          )}
 
           <View style={styles.switchRow}>
             <Text style={styles.label}>Activer l’automatisation</Text>
@@ -240,10 +274,15 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           <Pressable
             onPress={handleSave}
-            style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+            disabled={saving}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && styles.pressed,
+              saving && styles.disabled,
+            ]}
           >
             <Text style={styles.primaryText}>
-              {saved ? 'Enregistré' : 'Enregistrer'}
+              {saving ? 'Enregistrement…' : saved ? 'Enregistré' : 'Enregistrer'}
             </Text>
           </Pressable>
 
@@ -310,6 +349,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  warningText: {
+    color: '#f0a0a0',
+    fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: colors.power,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   field: {
     gap: 8,
   },
@@ -372,5 +422,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  disabled: {
+    opacity: 0.6,
   },
 });

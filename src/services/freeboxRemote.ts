@@ -138,14 +138,14 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 async function countdownWait(
   seconds: number,
-  label: string,
+  messageFor: (left: number) => string,
   onProgress: (p: SmartStartProgress) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   for (let left = seconds; left >= 1; left -= 1) {
     if (signal?.aborted) throw new Error('Aborted');
     onProgress({
-      message: `${label} (${left}s)`,
+      message: messageFor(left),
       tone: 'info',
       countdown: left,
     });
@@ -154,9 +154,9 @@ async function countdownWait(
 }
 
 /**
- * Smart start macro:
- * - Off / unreachable → power → wait 20s → ok
- * - Already reachable → home → wait 3s → ok
+ * Manual / daytime smart-start:
+ * - Off → power → 20s → ok
+ * - On → home → 3s → ok
  */
 export async function runSmartStart(
   config: FreeboxConfig,
@@ -164,7 +164,7 @@ export async function runSmartStart(
   signal?: AbortSignal,
 ): Promise<CommandResult> {
   onProgress({
-    message: 'Vérification du Freebox Player…',
+    message: 'Vérification de l’état du Player…',
     tone: 'info',
     countdown: null,
   });
@@ -173,7 +173,7 @@ export async function runSmartStart(
 
   if (!reachable) {
     onProgress({
-      message: 'Player éteint — envoi de Power…',
+      message: 'Player éteint. Allumage en cours...',
       tone: 'info',
       countdown: null,
     });
@@ -189,13 +189,13 @@ export async function runSmartStart(
 
     await countdownWait(
       20,
-      'Démarrage en cours — attente du menu',
+      (left) => `Attente du démarrage du Player : ${left} s...`,
       onProgress,
       signal,
     );
 
     onProgress({
-      message: 'Validation (OK)…',
+      message: 'Lancement de la TV...',
       tone: 'info',
       countdown: null,
     });
@@ -214,7 +214,7 @@ export async function runSmartStart(
   }
 
   onProgress({
-    message: 'Player allumé — retour Accueil (Home)…',
+    message: 'Player déjà allumé. Alignement sur le menu...',
     tone: 'info',
     countdown: null,
   });
@@ -224,10 +224,15 @@ export async function runSmartStart(
     return homeResult;
   }
 
-  await countdownWait(3, 'Ouverture du menu Accueil', onProgress, signal);
+  await countdownWait(
+    3,
+    (left) => `Alignement menu : ${left} s...`,
+    onProgress,
+    signal,
+  );
 
   onProgress({
-    message: 'Validation (OK)…',
+    message: 'Lancement de la TV...',
     tone: 'info',
     countdown: null,
   });
@@ -238,7 +243,75 @@ export async function runSmartStart(
   }
 
   onProgress({
-    message: 'Accueil prêt',
+    message: 'Menu prêt',
+    tone: 'success',
+    countdown: null,
+  });
+  return { ok: true };
+}
+
+/**
+ * Night / in-window keep-alive:
+ * - Off → power → wait 20s (no OK)
+ * - On → home only (stay on menu, no OK)
+ */
+export async function runNightKeepAlive(
+  config: FreeboxConfig,
+  onProgress: (p: SmartStartProgress) => void,
+  signal?: AbortSignal,
+): Promise<CommandResult> {
+  onProgress({
+    message: 'Surveillance nuit — vérification du Player…',
+    tone: 'info',
+    countdown: null,
+  });
+
+  const reachable = await isPlayerReachable(config);
+
+  if (!reachable) {
+    onProgress({
+      message: 'Player éteint. Allumage en cours...',
+      tone: 'info',
+      countdown: null,
+    });
+    const powerResult = await sendRemoteKey(config, 'power');
+    if (!powerResult.ok) {
+      onProgress({
+        message: powerResult.error,
+        tone: 'error',
+        countdown: null,
+      });
+      return powerResult;
+    }
+
+    await countdownWait(
+      20,
+      (left) => `Attente du démarrage du Player : ${left} s...`,
+      onProgress,
+      signal,
+    );
+
+    onProgress({
+      message: 'Player allumé (menu — sans OK)',
+      tone: 'success',
+      countdown: null,
+    });
+    return { ok: true };
+  }
+
+  onProgress({
+    message: 'Player déjà allumé. Alignement sur le menu...',
+    tone: 'info',
+    countdown: null,
+  });
+  const homeResult = await sendRemoteKey(config, 'home');
+  if (!homeResult.ok) {
+    onProgress({ message: homeResult.error, tone: 'error', countdown: null });
+    return homeResult;
+  }
+
+  onProgress({
+    message: 'Player sur le menu',
     tone: 'success',
     countdown: null,
   });
