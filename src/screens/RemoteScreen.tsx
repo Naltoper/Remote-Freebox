@@ -6,8 +6,11 @@ import { ControlPad } from '../components/ControlPad';
 import { Header } from '../components/Header';
 import { NumberPad } from '../components/NumberPad';
 import { RemoteButton } from '../components/RemoteButton';
+import { SmartStartButton } from '../components/SmartStartButton';
+import { StatusToast, type ToastTone } from '../components/StatusToast';
 import { VolumeChannelPad } from '../components/VolumeChannelPad';
 import { useSettings } from '../context/SettingsContext';
+import type { SmartStartProgress } from '../services/freeboxRemote';
 import { colors } from '../theme/colors';
 
 type RemoteScreenProps = {
@@ -16,8 +19,9 @@ type RemoteScreenProps = {
 
 export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
   const { config } = useSettings();
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [statusOk, setStatusOk] = useState<boolean | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<ToastTone>('info');
+  const [toastCountdown, setToastCountdown] = useState<number | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -26,58 +30,104 @@ export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
     };
   }, []);
 
-  const handleResult = useCallback((ok: boolean, message?: string) => {
-    if (clearTimer.current) clearTimeout(clearTimer.current);
-    setStatusOk(ok);
-    setStatusMessage(ok ? 'Command sent' : message ?? 'Request failed');
-    clearTimer.current = setTimeout(() => {
-      setStatusMessage(null);
-      setStatusOk(null);
-    }, ok ? 1200 : 5000);
-  }, []);
+  const showToast = useCallback(
+    (message: string, tone: ToastTone, durationMs?: number) => {
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+      setToastMessage(message);
+      setToastTone(tone);
+      setToastCountdown(null);
+      if (durationMs != null) {
+        clearTimer.current = setTimeout(() => {
+          setToastMessage(null);
+          setToastCountdown(null);
+        }, durationMs);
+      }
+    },
+    [],
+  );
+
+  const handleResult = useCallback(
+    (ok: boolean, message?: string) => {
+      showToast(
+        ok ? 'Commande envoyée' : message ?? 'Échec de la requête',
+        ok ? 'success' : 'error',
+        ok ? 1400 : 4500,
+      );
+    },
+    [showToast],
+  );
+
+  const handleMacroProgress = useCallback(
+    (progress: SmartStartProgress | null) => {
+      if (!progress) {
+        setToastMessage(null);
+        setToastCountdown(null);
+        return;
+      }
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+      setToastMessage(progress.message);
+      setToastTone(progress.tone);
+      setToastCountdown(progress.countdown);
+      if (progress.tone === 'success' || progress.tone === 'error') {
+        clearTimer.current = setTimeout(() => {
+          setToastMessage(null);
+          setToastCountdown(null);
+        }, progress.tone === 'success' ? 2200 : 5000);
+      }
+    },
+    [],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Header
-          title="Freebox Remote"
-          subtitle={config.host}
-          statusMessage={statusMessage}
-          statusOk={statusOk}
-          onOpenSettings={onOpenSettings}
+      <View style={styles.shell}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Header
+            title="Freebox Remote"
+            subtitle={config.host}
+            onOpenSettings={onOpenSettings}
+          />
+
+          <SmartStartButton onProgress={handleMacroProgress} />
+
+          <View style={styles.topActions}>
+            <RemoteButton
+              label="Power"
+              remoteKey="power"
+              variant="power"
+              size="lg"
+              onResult={handleResult}
+            />
+            <RemoteButton
+              label="Home"
+              remoteKey="home"
+              variant="accent"
+              size="lg"
+              onResult={handleResult}
+            />
+            <RemoteButton
+              label="Back"
+              remoteKey="back"
+              size="lg"
+              onResult={handleResult}
+            />
+          </View>
+
+          <ControlPad onResult={handleResult} />
+          <VolumeChannelPad onResult={handleResult} />
+          <NumberPad onResult={handleResult} />
+        </ScrollView>
+
+        <StatusToast
+          message={toastMessage}
+          tone={toastTone}
+          countdown={toastCountdown}
         />
-
-        <View style={styles.topActions}>
-          <RemoteButton
-            label="Power"
-            remoteKey="power"
-            variant="power"
-            size="lg"
-            onResult={handleResult}
-          />
-          <RemoteButton
-            label="Home"
-            remoteKey="home"
-            variant="accent"
-            size="lg"
-            onResult={handleResult}
-          />
-          <RemoteButton
-            label="Back"
-            remoteKey="back"
-            size="lg"
-            onResult={handleResult}
-          />
-        </View>
-
-        <ControlPad onResult={handleResult} />
-        <VolumeChannelPad onResult={handleResult} />
-        <NumberPad onResult={handleResult} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -86,6 +136,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  shell: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 20,

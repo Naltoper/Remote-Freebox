@@ -5,16 +5,12 @@ import { colors } from '../theme/colors';
 type HeaderProps = {
   title?: string;
   subtitle?: string;
-  statusMessage?: string | null;
-  statusOk?: boolean | null;
   onOpenSettings: () => void;
 };
 
 export function Header({
   title = 'Remote TV',
   subtitle,
-  statusMessage,
-  statusOk,
   onOpenSettings,
 }: HeaderProps) {
   return (
@@ -33,33 +29,12 @@ export function Header({
           <Text style={styles.settingsIcon}>⚙</Text>
         </Pressable>
       </View>
-      {statusMessage ? (
-        <View
-          style={[
-            styles.status,
-            statusOk === false && styles.statusError,
-            statusOk === true && styles.statusOk,
-          ]}
-        >
-          <Text
-            style={[
-              styles.statusText,
-              statusOk === false && styles.statusTextError,
-              statusOk === true && styles.statusTextOk,
-            ]}
-            numberOfLines={2}
-          >
-            {statusMessage}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 10,
     paddingHorizontal: 4,
   },
   topRow: {
@@ -97,31 +72,5 @@ const styles = StyleSheet.create({
   settingsIcon: {
     fontSize: 20,
     color: colors.text,
-  },
-  status: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statusError: {
-    backgroundColor: colors.dangerSoft,
-    borderColor: colors.power,
-  },
-  statusOk: {
-    backgroundColor: colors.successSoft,
-    borderColor: colors.ok,
-  },
-  statusText: {
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  statusTextError: {
-    color: '#f0a0a0',
-  },
-  statusTextOk: {
-    color: '#9fd4b5',
   },
 });

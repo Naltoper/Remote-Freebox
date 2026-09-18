@@ -7,15 +7,17 @@ import type { CommandResult, FreeboxConfig, FreeboxKey } from '../types/remote';
  * Bare hosts (e.g. `192.168.1.49`) always use plain `http://`.
  * A full origin is only kept when the user explicitly sets `http://` or `https://`.
  */
-function buildUrl(config: FreeboxConfig, key: FreeboxKey): string {
+function buildOrigin(config: FreeboxConfig): string {
   const raw = config.host.trim().replace(/\/$/, '');
-  const origin = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  return /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+}
 
+function buildUrl(config: FreeboxConfig, key: FreeboxKey): string {
   const params = new URLSearchParams({
     code: config.code,
     key,
   });
-  return `${origin}/pub/remote_control?${params.toString()}`;
+  return `${buildOrigin(config)}/pub/remote_control?${params.toString()}`;
 }
 
 /**
@@ -77,6 +79,170 @@ export async function sendRemoteKey(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Heuristic: Player is "on" (or network-awake) if the host answers HTTP quickly.
+ * Fully powered-off boxes usually do not respond → treated as off.
+ */
+export async function isPlayerReachable(
+  config: FreeboxConfig,
+  timeoutMs = 2500,
+): Promise<boolean> {
+  const origin = buildOrigin(config);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const init: RequestInit = {
+      method: 'GET',
+      signal: controller.signal,
+      cache: 'no-store',
+    };
+    if (Platform.OS === 'web') {
+      init.mode = 'no-cors';
+    }
+    await fetch(`${origin}/`, init);
+    // Any completion (including opaque / non-2xx) means the host is reachable.
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export type SmartStartProgress = {
+  message: string;
+  tone: 'info' | 'success' | 'error';
+  countdown: number | null;
+};
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Aborted'));
+      return;
+    }
+    const id = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(id);
+        reject(new Error('Aborted'));
+      },
+      { once: true },
+    );
+  });
+}
+
+async function countdownWait(
+  seconds: number,
+  label: string,
+  onProgress: (p: SmartStartProgress) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  for (let left = seconds; left >= 1; left -= 1) {
+    if (signal?.aborted) throw new Error('Aborted');
+    onProgress({
+      message: `${label} (${left}s)`,
+      tone: 'info',
+      countdown: left,
+    });
+    await sleep(1000, signal);
+  }
+}
+
+/**
+ * Smart start macro:
+ * - Off / unreachable → power → wait 20s → ok
+ * - Already reachable → home → wait 3s → ok
+ */
+export async function runSmartStart(
+  config: FreeboxConfig,
+  onProgress: (p: SmartStartProgress) => void,
+  signal?: AbortSignal,
+): Promise<CommandResult> {
+  onProgress({
+    message: 'Vérification du Freebox Player…',
+    tone: 'info',
+    countdown: null,
+  });
+
+  const reachable = await isPlayerReachable(config);
+
+  if (!reachable) {
+    onProgress({
+      message: 'Player éteint — envoi de Power…',
+      tone: 'info',
+      countdown: null,
+    });
+    const powerResult = await sendRemoteKey(config, 'power');
+    if (!powerResult.ok) {
+      onProgress({
+        message: powerResult.error,
+        tone: 'error',
+        countdown: null,
+      });
+      return powerResult;
+    }
+
+    await countdownWait(
+      20,
+      'Démarrage en cours — attente du menu',
+      onProgress,
+      signal,
+    );
+
+    onProgress({
+      message: 'Validation (OK)…',
+      tone: 'info',
+      countdown: null,
+    });
+    const okResult = await sendRemoteKey(config, 'ok');
+    if (!okResult.ok) {
+      onProgress({ message: okResult.error, tone: 'error', countdown: null });
+      return okResult;
+    }
+
+    onProgress({
+      message: 'Démarrage terminé',
+      tone: 'success',
+      countdown: null,
+    });
+    return { ok: true };
+  }
+
+  onProgress({
+    message: 'Player allumé — retour Accueil (Home)…',
+    tone: 'info',
+    countdown: null,
+  });
+  const homeResult = await sendRemoteKey(config, 'home');
+  if (!homeResult.ok) {
+    onProgress({ message: homeResult.error, tone: 'error', countdown: null });
+    return homeResult;
+  }
+
+  await countdownWait(3, 'Ouverture du menu Accueil', onProgress, signal);
+
+  onProgress({
+    message: 'Validation (OK)…',
+    tone: 'info',
+    countdown: null,
+  });
+  const okResult = await sendRemoteKey(config, 'ok');
+  if (!okResult.ok) {
+    onProgress({ message: okResult.error, tone: 'error', countdown: null });
+    return okResult;
+  }
+
+  onProgress({
+    message: 'Accueil prêt',
+    tone: 'success',
+    countdown: null,
+  });
+  return { ok: true };
 }
 
 export { buildUrl };
