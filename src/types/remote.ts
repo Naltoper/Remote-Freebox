@@ -34,15 +34,25 @@ export type FreeboxConfig = {
   timeoutMs: number;
 };
 
-/** Scheduled smart-start automation (overnight window crosses midnight). */
+/** Active daytime window for smart-start automation. */
 export type AutomationSettings = {
   enabled: boolean;
-  /** HH:mm local time — start of active window (e.g. 19:00). */
+  /** HH:mm local — start of active window (default 10:00). */
   windowStart: string;
-  /** HH:mm local time — end of active window (e.g. 10:00 next day). */
+  /** HH:mm local — end of active window (default 19:00). */
   windowEnd: string;
-  /** Minutes between checks while inside the active window. */
+  /** Minutes between smart-start runs while inside the active window. */
   intervalMinutes: number;
-  /** Minutes between light checks outside the active window (no wake). */
-  offWindowIntervalMinutes: number;
+};
+
+export type HttpLogKind = 'ping' | FreeboxKey | 'other';
+
+export type HttpLogEntry = {
+  id: string;
+  timestamp: number;
+  kind: HttpLogKind;
+  label: string;
+  url: string;
+  ok: boolean;
+  detail: string;
 };

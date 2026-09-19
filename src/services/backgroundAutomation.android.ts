@@ -8,6 +8,7 @@ import {
   SMART_START_BACKGROUND_TASK,
   SMART_START_FOREGROUND_TASK,
 } from '../config/defaults';
+import { PASSIVE_WAIT_MS } from '../config/defaults';
 import {
   loadAutomationSettings,
   runScheduledAutomation,
@@ -16,7 +17,7 @@ import {
   startInProcessScheduler,
   stopInProcessScheduler,
 } from './automationScheduler';
-import { isInTimeWindow } from '../utils/timeWindow';
+import { msUntilNextAutomationWake } from '../utils/timeWindow';
 
 export type AutomationRuntimeResult = {
   ok: boolean;
@@ -52,17 +53,15 @@ function sleep(ms: number): Promise<void> {
 async function resolveLoopDelayMs(): Promise<number> {
   try {
     const automation = await loadAutomationSettings();
-    const inWindow = isInTimeWindow(
+    return msUntilNextAutomationWake(
       new Date(),
       automation.windowStart,
       automation.windowEnd,
+      automation.intervalMinutes,
+      PASSIVE_WAIT_MS,
     );
-    const minutes = inWindow
-      ? automation.intervalMinutes
-      : automation.offWindowIntervalMinutes;
-    return Math.max(minutes, 1) * 60 * 1000;
   } catch {
-    return 15 * 60 * 1000;
+    return PASSIVE_WAIT_MS;
   }
 }
 
@@ -181,11 +180,7 @@ async function stopAndroidForegroundService(): Promise<void> {
 
 async function registerExpoBackgroundTask(): Promise<void> {
   const automation = await loadAutomationSettings();
-  const minutes = Math.max(
-    automation.intervalMinutes,
-    automation.offWindowIntervalMinutes,
-    15,
-  );
+  const minutes = Math.max(automation.intervalMinutes, 15);
 
   const isRegistered = await TaskManager.isTaskRegisteredAsync(
     SMART_START_BACKGROUND_TASK,

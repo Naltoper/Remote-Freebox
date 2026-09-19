@@ -12,11 +12,7 @@ import {
   isInTimeWindow,
   parseHmToMinutes,
 } from '../utils/timeWindow';
-import {
-  runNightKeepAlive,
-  runSmartStart,
-  type SmartStartProgress,
-} from './freeboxRemote';
+import { runSmartStart, type SmartStartProgress } from './freeboxRemote';
 
 let automationRunLock = false;
 
@@ -43,26 +39,18 @@ export async function loadFreeboxConfig(): Promise<FreeboxConfig> {
 
 export async function loadAutomationSettings(): Promise<AutomationSettings> {
   try {
-    const [
-      enabledRaw,
-      windowStart,
-      windowEnd,
-      intervalRaw,
-      offIntervalRaw,
-    ] = await Promise.all([
-      AsyncStorage.getItem(STORAGE_KEYS.autoEnabled),
-      AsyncStorage.getItem(STORAGE_KEYS.autoWindowStart),
-      AsyncStorage.getItem(STORAGE_KEYS.autoWindowEnd),
-      AsyncStorage.getItem(STORAGE_KEYS.autoIntervalMinutes),
-      AsyncStorage.getItem(STORAGE_KEYS.autoOffWindowIntervalMinutes),
-    ]);
+    const [enabledRaw, windowStart, windowEnd, intervalRaw] = await Promise.all(
+      [
+        AsyncStorage.getItem(STORAGE_KEYS.autoEnabled),
+        AsyncStorage.getItem(STORAGE_KEYS.autoWindowStart),
+        AsyncStorage.getItem(STORAGE_KEYS.autoWindowEnd),
+        AsyncStorage.getItem(STORAGE_KEYS.autoIntervalMinutes),
+      ],
+    );
 
     const intervalMinutes = intervalRaw
       ? Number(intervalRaw)
       : DEFAULT_AUTOMATION.intervalMinutes;
-    const offWindowIntervalMinutes = offIntervalRaw
-      ? Number(offIntervalRaw)
-      : DEFAULT_AUTOMATION.offWindowIntervalMinutes;
 
     const start = windowStart?.trim() || DEFAULT_AUTOMATION.windowStart;
     const end = windowEnd?.trim() || DEFAULT_AUTOMATION.windowEnd;
@@ -80,10 +68,6 @@ export async function loadAutomationSettings(): Promise<AutomationSettings> {
       intervalMinutes: clampIntervalMinutes(
         intervalMinutes,
         DEFAULT_AUTOMATION.intervalMinutes,
-      ),
-      offWindowIntervalMinutes: clampIntervalMinutes(
-        offWindowIntervalMinutes,
-        DEFAULT_AUTOMATION.offWindowIntervalMinutes,
       ),
     };
   } catch {
@@ -106,10 +90,6 @@ export async function persistAutomationSettings(
         STORAGE_KEYS.autoIntervalMinutes,
         String(settings.intervalMinutes),
       ),
-      AsyncStorage.setItem(
-        STORAGE_KEYS.autoOffWindowIntervalMinutes,
-        String(settings.offWindowIntervalMinutes),
-      ),
     ]);
   } catch (error) {
     console.warn('[Automation] persist failed', error);
@@ -123,7 +103,7 @@ export async function writeAutomationStatus(message: string): Promise<void> {
       AsyncStorage.setItem(STORAGE_KEYS.autoLastStatus, message),
     ]);
   } catch {
-    // ignore status write failures
+    // ignore
   }
 }
 
@@ -134,8 +114,8 @@ export type ScheduledCheckResult = {
 };
 
 /**
- * IN window (night): keep Player on + menu (power+20s without OK, or home).
- * OUT of window (day): full smart-start (power→20s→OK or home→3s→OK).
+ * IN window → full smart-start at configured interval.
+ * OUT of window → no HTTP, passive wait only.
  */
 export async function runScheduledAutomation(
   onProgress?: (p: SmartStartProgress) => void,
@@ -166,27 +146,25 @@ export async function runScheduledAutomation(
       automation.windowEnd,
     );
 
+    if (!inWindow) {
+      const message = 'Hors plage — attente passive (aucune requête HTTP)';
+      onProgress?.({ message, tone: 'info', countdown: null });
+      await writeAutomationStatus(message);
+      return { ranMacro: false, inWindow: false, message };
+    }
+
     const progress =
       onProgress ??
       ((p: SmartStartProgress) => {
         void writeAutomationStatus(p.message);
       });
 
-    if (inWindow) {
-      const result = await runNightKeepAlive(config, progress);
-      const message = result.ok
-        ? 'Plage nuit — Player maintenu allumé / menu'
-        : `Plage nuit — échec: ${'error' in result ? result.error : 'inconnu'}`;
-      await writeAutomationStatus(message);
-      return { ranMacro: true, inWindow: true, message };
-    }
-
     const result = await runSmartStart(config, progress);
     const message = result.ok
-      ? 'Hors plage — démarrage intelligent terminé'
-      : `Hors plage — échec: ${'error' in result ? result.error : 'inconnu'}`;
+      ? 'Plage active — démarrage intelligent terminé'
+      : `Plage active — échec: ${'error' in result ? result.error : 'inconnu'}`;
     await writeAutomationStatus(message);
-    return { ranMacro: true, inWindow: false, message };
+    return { ranMacro: true, inWindow: true, message };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Erreur automatisation';

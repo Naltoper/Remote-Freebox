@@ -102,10 +102,6 @@ function normalizeAutomation(
       partial.intervalMinutes ?? base.intervalMinutes,
       DEFAULT_AUTOMATION.intervalMinutes,
     ),
-    offWindowIntervalMinutes: clampIntervalMinutes(
-      partial.offWindowIntervalMinutes ?? base.offWindowIntervalMinutes,
-      DEFAULT_AUTOMATION.offWindowIntervalMinutes,
-    ),
   };
 }
 
@@ -129,7 +125,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setAutomation(nextAutomation);
         setLoaded(true);
 
-        // Deferred, non-blocking — never crash the app on boot.
         if (nextAutomation.enabled) {
           bootTimer = setTimeout(() => {
             void syncAutomationRuntime(true)
@@ -165,7 +160,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const updateAutomation = useCallback(
     async (partial: Partial<AutomationSettings>) => {
       const nextSettings = normalizeAutomation(partial, automation);
-      // Persist first so a native crash cannot leave settings half-written wrongly.
       await persistAutomationSettings(nextSettings);
       setAutomation(nextSettings);
 

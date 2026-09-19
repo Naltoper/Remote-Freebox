@@ -6,12 +6,14 @@ type HeaderProps = {
   title?: string;
   subtitle?: string;
   onOpenSettings: () => void;
+  onOpenLogs: () => void;
 };
 
 export function Header({
   title = 'Remote TV',
   subtitle,
   onOpenSettings,
+  onOpenLogs,
 }: HeaderProps) {
   return (
     <View style={styles.wrap}>
@@ -20,14 +22,30 @@ export function Header({
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open settings"
-          onPress={onOpenSettings}
-          style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsPressed]}
-        >
-          <Text style={styles.settingsIcon}>⚙</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open HTTP logs"
+            onPress={onOpenLogs}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && styles.iconPressed,
+            ]}
+          >
+            <Text style={styles.iconText}>☰</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+            onPress={onOpenSettings}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && styles.iconPressed,
+            ]}
+          >
+            <Text style={styles.iconText}>⚙</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -56,7 +74,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
   },
-  settingsBtn: {
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -66,10 +89,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsPressed: {
+  iconPressed: {
     backgroundColor: colors.surfacePressed,
   },
-  settingsIcon: {
+  iconText: {
     fontSize: 20,
     color: colors.text,
   },

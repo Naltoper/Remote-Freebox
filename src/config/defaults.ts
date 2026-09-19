@@ -7,13 +7,12 @@ export const DEFAULT_CONFIG: FreeboxConfig = {
   timeoutMs: 4000,
 };
 
-/** Overnight window 19:00 → 10:00 with periodic smart-start checks. */
+/** Active window 10:00 → 19:00 with periodic smart-start checks. */
 export const DEFAULT_AUTOMATION: AutomationSettings = {
   enabled: false,
-  windowStart: '19:00',
-  windowEnd: '10:00',
+  windowStart: '10:00',
+  windowEnd: '19:00',
   intervalMinutes: 15,
-  offWindowIntervalMinutes: 60,
 };
 
 export const STORAGE_KEYS = {
@@ -24,10 +23,14 @@ export const STORAGE_KEYS = {
   autoWindowStart: '@remotetvmamie/autoWindowStart',
   autoWindowEnd: '@remotetvmamie/autoWindowEnd',
   autoIntervalMinutes: '@remotetvmamie/autoIntervalMinutes',
-  autoOffWindowIntervalMinutes: '@remotetvmamie/autoOffWindowIntervalMinutes',
   autoLastRunAt: '@remotetvmamie/autoLastRunAt',
   autoLastStatus: '@remotetvmamie/autoLastStatus',
+  httpLogs: '@remotetvmamie/httpLogs',
 } as const;
 
 export const SMART_START_BACKGROUND_TASK = 'SMART_START_BACKGROUND_TASK';
 export const SMART_START_FOREGROUND_TASK = 'SMART_START_FOREGROUND_TASK';
+
+export const HTTP_LOG_LIMIT = 100;
+/** Passive wake interval outside the active window (no HTTP). */
+export const PASSIVE_WAIT_MS = 60_000;

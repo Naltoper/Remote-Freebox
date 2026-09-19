@@ -39,9 +39,6 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
   const [intervalMinutes, setIntervalMinutes] = useState(
     String(automation.intervalMinutes),
   );
-  const [offWindowIntervalMinutes, setOffWindowIntervalMinutes] = useState(
-    String(automation.offWindowIntervalMinutes),
-  );
   const [autoEnabled, setAutoEnabled] = useState(automation.enabled);
   const [saved, setSaved] = useState(false);
   const [fgRunning, setFgRunning] = useState(false);
@@ -58,7 +55,6 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setWindowStart(automation.windowStart);
     setWindowEnd(automation.windowEnd);
     setIntervalMinutes(String(automation.intervalMinutes));
-    setOffWindowIntervalMinutes(String(automation.offWindowIntervalMinutes));
     setAutoEnabled(automation.enabled);
     setFgRunning(isForegroundServiceRunning());
   }, [automation]);
@@ -72,7 +68,6 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     try {
       const parsedTimeout = Number(timeoutMs);
       const parsedInterval = Number(intervalMinutes);
-      const parsedOffInterval = Number(offWindowIntervalMinutes);
 
       await updateConfig({
         host: host.trim() || DEFAULT_CONFIG.host,
@@ -90,9 +85,6 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
         intervalMinutes: Number.isFinite(parsedInterval)
           ? parsedInterval
           : DEFAULT_AUTOMATION.intervalMinutes,
-        offWindowIntervalMinutes: Number.isFinite(parsedOffInterval)
-          ? parsedOffInterval
-          : DEFAULT_AUTOMATION.offWindowIntervalMinutes,
       });
 
       setFgRunning(isForegroundServiceRunning());
@@ -120,9 +112,6 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setWindowStart(DEFAULT_AUTOMATION.windowStart);
     setWindowEnd(DEFAULT_AUTOMATION.windowEnd);
     setIntervalMinutes(String(DEFAULT_AUTOMATION.intervalMinutes));
-    setOffWindowIntervalMinutes(
-      String(DEFAULT_AUTOMATION.offWindowIntervalMinutes),
-    );
     setAutoEnabled(DEFAULT_AUTOMATION.enabled);
     setFgRunning(false);
   };
@@ -191,11 +180,11 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           <Text style={styles.section}>Démarrage intelligent auto</Text>
           <Text style={styles.hint}>
-            Dans la plage (ex. 19:00 → 10:00) : maintient le Player allumé sur le
-            menu (Power + 20s sans OK, ou Home). Hors plage : démarrage
-            intelligent complet (Power → 20s → OK). Sur Android, un Foreground
-            Service (notification « Automatisation Freebox active ») maintient
-            la surveillance en arrière-plan.
+            Pendant la plage active (défaut 10:00 → 19:00) : exécute le
+            démarrage intelligent complet à l’intervalle configuré. Hors plage :
+            aucune requête HTTP — le service reste en attente passive. Sur
+            Android, un Foreground Service (notification « Automatisation
+            Freebox active ») maintient la surveillance en arrière-plan.
           </Text>
 
           {(saveWarning || lastAutomationWarning) && (
@@ -242,24 +231,12 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Intervalle dans la plage (min)</Text>
+            <Text style={styles.label}>Intervalle d’exécution (min)</Text>
             <TextInput
               value={intervalMinutes}
               onChangeText={setIntervalMinutes}
               keyboardType="number-pad"
               placeholder={String(DEFAULT_AUTOMATION.intervalMinutes)}
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Intervalle hors plage (min)</Text>
-            <TextInput
-              value={offWindowIntervalMinutes}
-              onChangeText={setOffWindowIntervalMinutes}
-              keyboardType="number-pad"
-              placeholder={String(DEFAULT_AUTOMATION.offWindowIntervalMinutes)}
               placeholderTextColor={colors.textMuted}
               style={styles.input}
             />

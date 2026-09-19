@@ -1,7 +1,8 @@
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import { PASSIVE_WAIT_MS } from '../config/defaults';
 import { loadAutomationSettings, runScheduledAutomation } from './automation';
-import { isInTimeWindow } from '../utils/timeWindow';
+import { msUntilNextAutomationWake } from '../utils/timeWindow';
 
 type SchedulerState = {
   timer: ReturnType<typeof setTimeout> | null;
@@ -25,18 +26,15 @@ function clearTimer() {
 async function nextDelayMs(): Promise<number> {
   try {
     const automation = await loadAutomationSettings();
-    const inWindow = isInTimeWindow(
+    return msUntilNextAutomationWake(
       new Date(),
       automation.windowStart,
       automation.windowEnd,
+      automation.intervalMinutes,
+      PASSIVE_WAIT_MS,
     );
-    const minutes = inWindow
-      ? automation.intervalMinutes
-      : automation.offWindowIntervalMinutes;
-    // Keep a sane minimum to avoid hammering the Freebox / draining battery.
-    return Math.max(minutes, 1) * 60 * 1000;
   } catch {
-    return 15 * 60 * 1000;
+    return PASSIVE_WAIT_MS;
   }
 }
 
@@ -57,7 +55,6 @@ async function tick() {
 
 function onAppStateChange(next: AppStateStatus) {
   if (!state.running) return;
-  // When returning to foreground, run a check sooner.
   if (next === 'active') {
     clearTimer();
     state.timer = setTimeout(() => {
@@ -66,11 +63,6 @@ function onAppStateChange(next: AppStateStatus) {
   }
 }
 
-/**
- * In-process scheduler (no native Foreground Service).
- * Runs while the JS runtime is alive (app open / recent). Complements
- * expo-background-task for OS-scheduled background wakes.
- */
 export async function startInProcessScheduler(): Promise<void> {
   if (state.running) return;
   state.running = true;
@@ -79,7 +71,6 @@ export async function startInProcessScheduler(): Promise<void> {
     state.appStateSub = AppState.addEventListener('change', onAppStateChange);
   }
 
-  // First tick deferred so Settings save / UI can finish.
   clearTimer();
   state.timer = setTimeout(() => {
     void tick();

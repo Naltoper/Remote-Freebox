@@ -44,11 +44,7 @@ async function registerExpoBackgroundTask(): Promise<void> {
   if (Platform.OS === 'web') return;
 
   const automation = await loadAutomationSettings();
-  const minutes = Math.max(
-    automation.intervalMinutes,
-    automation.offWindowIntervalMinutes,
-    15,
-  );
+  const minutes = Math.max(automation.intervalMinutes, 15);
 
   const isRegistered = await TaskManager.isTaskRegisteredAsync(
     SMART_START_BACKGROUND_TASK,

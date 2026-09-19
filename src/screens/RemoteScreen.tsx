@@ -15,9 +15,13 @@ import { colors } from '../theme/colors';
 
 type RemoteScreenProps = {
   onOpenSettings: () => void;
+  onOpenLogs: () => void;
 };
 
-export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
+export function RemoteScreen({
+  onOpenSettings,
+  onOpenLogs,
+}: RemoteScreenProps) {
   const { config } = useSettings();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<ToastTone>('info');
@@ -90,6 +94,7 @@ export function RemoteScreen({ onOpenSettings }: RemoteScreenProps) {
             title="Freebox Remote"
             subtitle={config.host}
             onOpenSettings={onOpenSettings}
+            onOpenLogs={onOpenLogs}
           />
 
           <SmartStartButton onProgress={handleMacroProgress} />

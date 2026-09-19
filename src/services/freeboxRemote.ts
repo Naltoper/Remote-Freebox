@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import type { CommandResult, FreeboxConfig, FreeboxKey } from '../types/remote';
+import { appendHttpLog, labelForKind } from './httpLog';
 
 /**
  * Builds the Freebox remote-control URL.
@@ -18,6 +19,23 @@ function buildUrl(config: FreeboxConfig, key: FreeboxKey): string {
     key,
   });
   return `${buildOrigin(config)}/pub/remote_control?${params.toString()}`;
+}
+
+function logKeyResult(
+  key: FreeboxKey,
+  url: string,
+  result: CommandResult,
+): void {
+  const label = labelForKind(key);
+  void appendHttpLog({
+    kind: key,
+    url,
+    ok: result.ok,
+    label,
+    detail: result.ok
+      ? `Commande ${label} envoyée`
+      : `ÉCHEC / FAIL — ${result.error}`,
+  });
 }
 
 /**
@@ -42,7 +60,9 @@ export async function sendRemoteKey(
         signal: controller.signal,
         cache: 'no-store',
       });
-      return { ok: true, opaque: true };
+      const result: CommandResult = { ok: true, opaque: true };
+      logKeyResult(key, url, result);
+      return result;
     }
 
     const response = await fetch(url, {
@@ -52,30 +72,44 @@ export async function sendRemoteKey(
     });
 
     if (!response.ok) {
-      return { ok: false, error: `HTTP ${response.status}` };
+      const result: CommandResult = {
+        ok: false,
+        error: `HTTP ${response.status}`,
+      };
+      logKeyResult(key, url, result);
+      return result;
     }
 
     const body = (await response.text()).trim();
     if (body && body !== 'OK') {
-      return { ok: false, error: `Unexpected response: ${body}` };
+      const result: CommandResult = {
+        ok: false,
+        error: `Unexpected response: ${body}`,
+      };
+      logKeyResult(key, url, result);
+      return result;
     }
 
-    return { ok: true };
+    const result: CommandResult = { ok: true };
+    logKeyResult(key, url, result);
+    return result;
   } catch (err) {
     const timedOut =
       err instanceof Error &&
       (err.name === 'AbortError' || /aborted|timeout/i.test(err.message));
 
-    if (timedOut) {
-      return {
-        ok: false,
-        timedOut: true,
-        error: 'Timeout — check VPN / Freebox Player power',
-      };
-    }
-
-    const message = err instanceof Error ? err.message : 'Network error';
-    return { ok: false, error: message };
+    const result: CommandResult = timedOut
+      ? {
+          ok: false,
+          timedOut: true,
+          error: 'Timeout — check VPN / Freebox Player power',
+        }
+      : {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Network error',
+        };
+    logKeyResult(key, url, result);
+    return result;
   } finally {
     clearTimeout(timer);
   }
@@ -90,6 +124,7 @@ export async function isPlayerReachable(
   timeoutMs = 2500,
 ): Promise<boolean> {
   const origin = buildOrigin(config);
+  const url = `${origin}/`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -102,10 +137,38 @@ export async function isPlayerReachable(
     if (Platform.OS === 'web') {
       init.mode = 'no-cors';
     }
-    await fetch(`${origin}/`, init);
-    // Any completion (including opaque / non-2xx) means the host is reachable.
+    await fetch(url, init);
+    void appendHttpLog({
+      kind: 'ping',
+      url,
+      ok: true,
+      detail: 'Player allumé / joignable',
+      label: 'Ping / Status',
+    });
     return true;
-  } catch {
+  } catch (err) {
+    const timedOut =
+      err instanceof Error &&
+      (err.name === 'AbortError' || /aborted|timeout/i.test(err.message));
+    // Timeout on status probe usually means the box is powered off — treat as
+    // a successful diagnostic outcome (green "Player éteint"), not a network bug.
+    if (timedOut) {
+      void appendHttpLog({
+        kind: 'ping',
+        url,
+        ok: true,
+        detail: 'Player éteint (pas de réponse HTTP)',
+        label: 'Ping / Status',
+      });
+      return false;
+    }
+    void appendHttpLog({
+      kind: 'ping',
+      url,
+      ok: false,
+      detail: `ÉCHEC / FAIL — ${err instanceof Error ? err.message : 'réseau'}`,
+      label: 'Ping / Status',
+    });
     return false;
   } finally {
     clearTimeout(timer);
@@ -154,7 +217,7 @@ async function countdownWait(
 }
 
 /**
- * Manual / daytime smart-start:
+ * Smart-start macro:
  * - Off → power → 20s → ok
  * - On → home → 3s → ok
  */
@@ -244,74 +307,6 @@ export async function runSmartStart(
 
   onProgress({
     message: 'Menu prêt',
-    tone: 'success',
-    countdown: null,
-  });
-  return { ok: true };
-}
-
-/**
- * Night / in-window keep-alive:
- * - Off → power → wait 20s (no OK)
- * - On → home only (stay on menu, no OK)
- */
-export async function runNightKeepAlive(
-  config: FreeboxConfig,
-  onProgress: (p: SmartStartProgress) => void,
-  signal?: AbortSignal,
-): Promise<CommandResult> {
-  onProgress({
-    message: 'Surveillance nuit — vérification du Player…',
-    tone: 'info',
-    countdown: null,
-  });
-
-  const reachable = await isPlayerReachable(config);
-
-  if (!reachable) {
-    onProgress({
-      message: 'Player éteint. Allumage en cours...',
-      tone: 'info',
-      countdown: null,
-    });
-    const powerResult = await sendRemoteKey(config, 'power');
-    if (!powerResult.ok) {
-      onProgress({
-        message: powerResult.error,
-        tone: 'error',
-        countdown: null,
-      });
-      return powerResult;
-    }
-
-    await countdownWait(
-      20,
-      (left) => `Attente du démarrage du Player : ${left} s...`,
-      onProgress,
-      signal,
-    );
-
-    onProgress({
-      message: 'Player allumé (menu — sans OK)',
-      tone: 'success',
-      countdown: null,
-    });
-    return { ok: true };
-  }
-
-  onProgress({
-    message: 'Player déjà allumé. Alignement sur le menu...',
-    tone: 'info',
-    countdown: null,
-  });
-  const homeResult = await sendRemoteKey(config, 'home');
-  if (!homeResult.ok) {
-    onProgress({ message: homeResult.error, tone: 'error', countdown: null });
-    return homeResult;
-  }
-
-  onProgress({
-    message: 'Player sur le menu',
     tone: 'success',
     countdown: null,
   });

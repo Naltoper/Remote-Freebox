@@ -58,3 +58,31 @@ export function clampIntervalMinutes(value: number, fallback: number): number {
   if (!Number.isFinite(value) || value < 1) return fallback;
   return Math.min(Math.floor(value), 24 * 60);
 }
+
+/**
+ * Delay until the next scheduler wake.
+ * - Inside window → configured interval
+ * - Outside window → short passive wait (no HTTP), or ms until window start
+ */
+export function msUntilNextAutomationWake(
+  now: Date,
+  windowStart: string,
+  windowEnd: string,
+  intervalMinutes: number,
+  passiveWaitMs = 60_000,
+): number {
+  if (isInTimeWindow(now, windowStart, windowEnd)) {
+    return Math.max(intervalMinutes, 1) * 60 * 1000;
+  }
+
+  const start = parseHmToMinutes(windowStart);
+  if (start == null) return passiveWaitMs;
+
+  const current = now.getHours() * 60 + now.getMinutes();
+  let minutesUntilStart = start - current;
+  if (minutesUntilStart <= 0) {
+    minutesUntilStart += 24 * 60;
+  }
+  // Wake at most every passiveWaitMs so clock drift / DST are handled.
+  return Math.min(minutesUntilStart * 60 * 1000, passiveWaitMs);
+}
