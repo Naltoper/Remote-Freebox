@@ -193,9 +193,9 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           <Text style={styles.hint}>
             Dans la plage (ex. 19:00 → 10:00) : maintient le Player allumé sur le
             menu (Power + 20s sans OK, ou Home). Hors plage : démarrage
-            intelligent complet (Power → 20s → OK). La surveillance tourne via un
-            timer in-app + tâche système (pas de Foreground Service natif, pour
-            éviter les crashs Android).
+            intelligent complet (Power → 20s → OK). Sur Android, un Foreground
+            Service (notification « Automatisation Freebox active ») maintient
+            la surveillance en arrière-plan.
           </Text>
 
           {(saveWarning || lastAutomationWarning) && (
@@ -267,7 +267,8 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           {Platform.OS === 'android' ? (
             <Text style={styles.statusLine}>
-              Surveillance : {fgRunning || autoEnabled ? 'active' : 'arrêtée'}
+              Foreground Service :{' '}
+              {fgRunning ? 'actif' : autoEnabled ? 'démarrage…' : 'arrêté'}
             </Text>
           ) : null}
 

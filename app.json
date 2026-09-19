@@ -36,7 +36,10 @@
         "VIBRATE",
         "INTERNET",
         "WAKE_LOCK",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_DATA_SYNC",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -62,7 +65,9 @@
         }
       ],
       "./plugins/withCleartextTraffic.js",
-      "expo-background-task"
+      "./plugins/withForegroundService.js",
+      "expo-background-task",
+      "expo-notifications"
     ]
   }
 }

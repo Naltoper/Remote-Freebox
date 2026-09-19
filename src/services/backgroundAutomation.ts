@@ -23,10 +23,6 @@ declare global {
   var __smartStartTaskDefined: boolean | undefined;
 }
 
-/**
- * Register TaskManager handler once. Must stay free of native Foreground Service
- * APIs — those caused fatal Android process kills that JS try/catch cannot catch.
- */
 if (!globalThis.__smartStartTaskDefined && Platform.OS !== 'web') {
   try {
     TaskManager.defineTask(SMART_START_BACKGROUND_TASK, async () => {
@@ -54,20 +50,15 @@ async function registerExpoBackgroundTask(): Promise<void> {
     15,
   );
 
-  try {
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(
-      SMART_START_BACKGROUND_TASK,
-    );
-    if (isRegistered) {
-      await BackgroundTask.unregisterTaskAsync(SMART_START_BACKGROUND_TASK);
-    }
-    await BackgroundTask.registerTaskAsync(SMART_START_BACKGROUND_TASK, {
-      minimumInterval: minutes,
-    });
-  } catch (error) {
-    console.warn('[SmartStart] registerExpoBackgroundTask failed', error);
-    throw error;
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(
+    SMART_START_BACKGROUND_TASK,
+  );
+  if (isRegistered) {
+    await BackgroundTask.unregisterTaskAsync(SMART_START_BACKGROUND_TASK);
   }
+  await BackgroundTask.registerTaskAsync(SMART_START_BACKGROUND_TASK, {
+    minimumInterval: minutes,
+  });
 }
 
 async function unregisterExpoBackgroundTask(): Promise<void> {
@@ -84,11 +75,7 @@ async function unregisterExpoBackgroundTask(): Promise<void> {
   }
 }
 
-/**
- * Stable automation runtime (no react-native-background-actions).
- * - In-process timer while the app runtime is alive
- * - expo-background-task for OS-deferred background wakes (Android/iOS)
- */
+/** iOS / web: in-process scheduler + Expo BackgroundTask (no FGS). */
 export async function startAutomationRuntime(): Promise<AutomationRuntimeResult> {
   try {
     const automation = await loadAutomationSettings();
@@ -105,7 +92,7 @@ export async function startAutomationRuntime(): Promise<AutomationRuntimeResult>
         await registerExpoBackgroundTask();
       } catch {
         warning =
-          'Tâche système d’arrière-plan indisponible — la surveillance continue tant que l’app reste ouverte.';
+          'Tâche système d’arrière-plan indisponible — surveillance limitée à l’app ouverte.';
       }
     } else {
       warning =
@@ -114,12 +101,6 @@ export async function startAutomationRuntime(): Promise<AutomationRuntimeResult>
 
     return { ok: true, warning };
   } catch (error) {
-    console.warn('[SmartStart] startAutomationRuntime failed', error);
-    try {
-      await stopInProcessScheduler();
-    } catch {
-      // ignore
-    }
     return {
       ok: false,
       warning:
@@ -131,16 +112,8 @@ export async function startAutomationRuntime(): Promise<AutomationRuntimeResult>
 }
 
 export async function stopAutomationRuntime(): Promise<void> {
-  try {
-    await stopInProcessScheduler();
-  } catch (error) {
-    console.warn('[SmartStart] stop scheduler failed', error);
-  }
-  try {
-    await unregisterExpoBackgroundTask();
-  } catch (error) {
-    console.warn('[SmartStart] stop background task failed', error);
-  }
+  await stopInProcessScheduler();
+  await unregisterExpoBackgroundTask();
 }
 
 export async function syncAutomationRuntime(
@@ -153,7 +126,6 @@ export async function syncAutomationRuntime(
     await stopAutomationRuntime();
     return { ok: true };
   } catch (error) {
-    console.warn('[SmartStart] syncAutomationRuntime failed', error);
     return {
       ok: false,
       warning:
@@ -165,6 +137,5 @@ export async function syncAutomationRuntime(
 }
 
 export function isForegroundServiceRunning(): boolean {
-  // Kept for Settings UI compatibility — now reflects in-process scheduler.
   return isInProcessSchedulerRunning();
 }
