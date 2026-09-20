@@ -140,7 +140,7 @@ export function RemoteScreen({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   shell: {
     flex: 1,

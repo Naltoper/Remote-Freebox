@@ -32,5 +32,8 @@ export const SMART_START_BACKGROUND_TASK = 'SMART_START_BACKGROUND_TASK';
 export const SMART_START_FOREGROUND_TASK = 'SMART_START_FOREGROUND_TASK';
 
 export const HTTP_LOG_LIMIT = 100;
-/** Passive wake interval outside the active window (no HTTP). */
-export const PASSIVE_WAIT_MS = 60_000;
+/**
+ * Out-of-window re-check cadence (no HTTP). 10 min keeps battery low while
+ * still catching window open within an acceptable Automate-style margin.
+ */
+export const PASSIVE_WAIT_MS = 10 * 60 * 1000;

@@ -1,5 +1,7 @@
+import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -21,23 +23,63 @@ type LogsScreenProps = {
   onClose: () => void;
 };
 
+function formatEntriesForClipboard(entries: HttpLogEntry[]): string {
+  if (entries.length === 0) return 'Aucun log.';
+  return entries
+    .map((item) => {
+      const status = item.ok ? 'OK' : 'ÉCHEC';
+      return `[${formatLogTime(item.timestamp)}] ${status} — ${item.label}\n${item.detail}`;
+    })
+    .join('\n\n');
+}
+
 export function LogsScreen({ onClose }: LogsScreenProps) {
   const [entries, setEntries] = useState<HttpLogEntry[]>([]);
   const [clearing, setClearing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void loadHttpLogs().then(setEntries);
     return subscribeHttpLogs(setEntries);
   }, []);
 
-  const handleClear = async () => {
-    if (clearing) return;
-    setClearing(true);
+  const handleCopy = async () => {
+    if (entries.length === 0) return;
     try {
-      await clearHttpLogs();
-    } finally {
-      setClearing(false);
+      await Clipboard.setStringAsync(formatEntriesForClipboard(entries));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (error) {
+      Alert.alert(
+        'Copie impossible',
+        error instanceof Error ? error.message : 'Erreur presse-papier',
+      );
     }
+  };
+
+  const handleClear = () => {
+    if (clearing || entries.length === 0) return;
+    Alert.alert(
+      'Vider l’historique',
+      'Supprimer définitivement tous les logs HTTP ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Vider',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setClearing(true);
+              try {
+                await clearHttpLogs();
+              } finally {
+                setClearing(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -48,19 +90,34 @@ export function LogsScreen({ onClose }: LogsScreenProps) {
         </Pressable>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Logs HTTP</Text>
-          <Pressable
-            onPress={handleClear}
-            disabled={clearing || entries.length === 0}
-            style={({ pressed }) => [
-              styles.clearBtn,
-              pressed && styles.pressed,
-              (clearing || entries.length === 0) && styles.disabled,
-            ]}
-          >
-            <Text style={styles.clearText}>
-              {clearing ? '…' : 'Vider'}
-            </Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={handleCopy}
+              disabled={entries.length === 0}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.pressed,
+                entries.length === 0 && styles.disabled,
+              ]}
+            >
+              <Text style={styles.actionText}>
+                {copied ? 'Copié' : 'Copier'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClear}
+              disabled={clearing || entries.length === 0}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.pressed,
+                (clearing || entries.length === 0) && styles.disabled,
+              ]}
+            >
+              <Text style={styles.actionText}>
+                {clearing ? '…' : 'Vider'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.hint}>
           100 dernières requêtes Freebox (boutons, macro, automatisation).
@@ -106,7 +163,7 @@ export function LogsScreen({ onClose }: LogsScreenProps) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: 20,
@@ -133,16 +190,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 24,
     fontWeight: '700',
+    flexShrink: 1,
   },
-  clearBtn: {
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(44, 49, 60, 0.88)',
   },
-  clearText: {
+  actionText: {
     color: colors.textMuted,
     fontWeight: '700',
     fontSize: 13,

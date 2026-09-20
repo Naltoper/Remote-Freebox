@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -12,10 +13,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DEFAULT_AUTOMATION, DEFAULT_CONFIG } from '../config/defaults';
+import {
+  DEFAULT_AUTOMATION,
+  DEFAULT_CONFIG,
+  STORAGE_KEYS,
+} from '../config/defaults';
 import { useSettings } from '../context/SettingsContext';
 import { isForegroundServiceRunning } from '../services/backgroundAutomation';
 import { colors } from '../theme/colors';
+import { getNextAutomationInfo } from '../utils/timeWindow';
 
 type SettingsScreenProps = {
   onClose: () => void;
@@ -44,6 +50,8 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
   const [fgRunning, setFgRunning] = useState(false);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [nextLabel, setNextLabel] = useState('…');
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     setHost(config.host);
@@ -58,6 +66,39 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setAutoEnabled(automation.enabled);
     setFgRunning(isForegroundServiceRunning());
   }, [automation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEYS.autoLastRunAt);
+        const lastRunAtMs = raw ? Number(raw) : null;
+        const parsedInterval = Number(intervalMinutes);
+        const info = getNextAutomationInfo(
+          new Date(),
+          autoEnabled,
+          windowStart.trim() || DEFAULT_AUTOMATION.windowStart,
+          windowEnd.trim() || DEFAULT_AUTOMATION.windowEnd,
+          Number.isFinite(parsedInterval)
+            ? parsedInterval
+            : DEFAULT_AUTOMATION.intervalMinutes,
+          Number.isFinite(lastRunAtMs as number) ? lastRunAtMs : null,
+        );
+        if (!cancelled) setNextLabel(info.label);
+      } catch {
+        if (!cancelled) setNextLabel('Prochain démarrage : —');
+      }
+    };
+    void refresh();
+    return () => {
+      cancelled = true;
+    };
+  }, [autoEnabled, windowStart, windowEnd, intervalMinutes, automation, tick]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSave = async () => {
     if (saving) return;
@@ -92,6 +133,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
         setSaveWarning(runtime.warning);
       }
       setSaved(true);
+      setTick((n) => n + 1);
       setTimeout(() => setSaved(false), 1500);
     } catch (error) {
       setSaveWarning(
@@ -114,6 +156,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setIntervalMinutes(String(DEFAULT_AUTOMATION.intervalMinutes));
     setAutoEnabled(DEFAULT_AUTOMATION.enabled);
     setFgRunning(false);
+    setTick((n) => n + 1);
   };
 
   return (
@@ -181,10 +224,11 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
           <Text style={styles.section}>Démarrage intelligent auto</Text>
           <Text style={styles.hint}>
             Pendant la plage active (défaut 10:00 → 19:00) : exécute le
-            démarrage intelligent complet à l’intervalle configuré. Hors plage :
-            aucune requête HTTP — le service reste en attente passive. Sur
-            Android, un Foreground Service (notification « Automatisation
-            Freebox active ») maintient la surveillance en arrière-plan.
+            démarrage intelligent complet à l’intervalle configuré (marge
+            batterie de quelques minutes acceptée). Hors plage : aucune requête
+            HTTP — attente passive. Sur Android, un Foreground Service
+            (notification « Automatisation Freebox active ») maintient la
+            surveillance en arrière-plan.
           </Text>
 
           {(saveWarning || lastAutomationWarning) && (
@@ -201,6 +245,10 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
               trackColor={{ false: colors.border, true: colors.ok }}
               thumbColor="#fff"
             />
+          </View>
+
+          <View style={styles.nextBox}>
+            <Text style={styles.nextLabel}>{nextLabel}</Text>
           </View>
 
           <View style={styles.rowFields}>
@@ -281,7 +329,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   flex: {
     flex: 1,
@@ -337,6 +385,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  nextBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(232, 163, 23, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  nextLabel: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: '700',
+  },
   field: {
     gap: 8,
   },
@@ -360,7 +421,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(44, 49, 60, 0.9)',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
@@ -391,6 +452,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: 'rgba(44, 49, 60, 0.55)',
   },
   secondaryText: {
     color: colors.textMuted,

@@ -4,13 +4,13 @@
     "slug": "RemoteTVMamie",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/logoMoumouMatrix.png",
     "userInterfaceStyle": "dark",
     "scheme": "remotetvmamie",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/logoMoumouMatrix.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1d24"
+      "backgroundColor": "#0a0c10"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,11 +24,10 @@
     },
     "android": {
       "package": "com.naltoper.remotefreebox",
+      "icon": "./assets/images/logoMoumouMatrix.png",
       "adaptiveIcon": {
-        "backgroundColor": "#1a1d24",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0a0c10",
+        "foregroundImage": "./assets/images/logoMoumouMatrix.png"
       },
       "predictiveBackGestureEnabled": false,
       "usesCleartextTraffic": true,
@@ -43,12 +42,12 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/images/logoMoumouMatrix.png",
       "name": "RemoteTVMamie",
       "shortName": "TV Remote",
       "lang": "fr",
-      "themeColor": "#1a1d24",
-      "backgroundColor": "#1a1d24",
+      "themeColor": "#0a0c10",
+      "backgroundColor": "#0a0c10",
       "display": "standalone",
       "orientation": "portrait",
       "bundler": "metro",
@@ -66,8 +65,16 @@
       ],
       "./plugins/withCleartextTraffic.js",
       "./plugins/withForegroundService.js",
+      "./plugins/withNotificationNoChronometer.js",
       "expo-background-task",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logoMoumouMatrix.png",
+          "color": "#e8a317"
+        }
+      ],
+      "expo-clipboard"
     ]
   }
 }

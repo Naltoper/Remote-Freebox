@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppBackground } from './src/components/AppBackground';
 import { SettingsProvider, useSettings } from './src/context/SettingsContext';
 import { LogsScreen } from './src/screens/LogsScreen';
 import { RemoteScreen } from './src/screens/RemoteScreen';
@@ -43,8 +44,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SettingsProvider>
-        <StatusBar style="light" />
-        <AppShell />
+        <AppBackground>
+          <StatusBar style="light" />
+          <AppShell />
+        </AppBackground>
       </SettingsProvider>
     </SafeAreaProvider>
   );
@@ -53,7 +56,6 @@ export default function App() {
 const styles = StyleSheet.create({
   loading: {
     flex: 1,
-    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
