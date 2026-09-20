@@ -74,7 +74,6 @@
           "color": "#e8a317"
         }
       ],
-      "expo-clipboard",
       [
         "react-native-android-widget",
         {
