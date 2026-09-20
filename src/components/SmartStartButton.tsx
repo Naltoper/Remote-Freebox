@@ -11,6 +11,8 @@ import {
 import { useSettings } from '../context/SettingsContext';
 import { runSmartStart, type SmartStartProgress } from '../services/freeboxRemote';
 import { colors } from '../theme/colors';
+import { refreshFreeboxWidget } from '../widget/refreshWidget';
+import { setWidgetActionStatus } from '../widget/widgetState';
 
 type SmartStartButtonProps = {
   disabled?: boolean;
@@ -62,6 +64,16 @@ export function SmartStartButton({
         } catch {
           // ignore
         }
+      }
+      try {
+        await setWidgetActionStatus(
+          result.ok
+            ? 'Démarrage intelligent OK'
+            : `ÉCHEC — ${'error' in result ? result.error : 'inconnu'}`,
+        );
+        await refreshFreeboxWidget();
+      } catch {
+        // widget refresh is best-effort
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Macro interrompue';

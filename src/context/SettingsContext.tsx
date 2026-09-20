@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import {
   DEFAULT_AUTOMATION,
@@ -28,6 +29,7 @@ import {
   formatHm,
   parseHmToMinutes,
 } from '../utils/timeWindow';
+import { refreshFreeboxWidget } from '../widget/refreshWidget';
 
 type SettingsContextValue = {
   config: FreeboxConfig;
@@ -124,6 +126,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setConfig(nextConfig);
         setAutomation(nextAutomation);
         setLoaded(true);
+        void refreshFreeboxWidget();
 
         if (nextAutomation.enabled) {
           bootTimer = setTimeout(() => {
@@ -149,6 +152,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Keep in sync when the home-screen widget toggles automation while the app sleeps.
+  useEffect(() => {
+    const onAppState = (next: AppStateStatus) => {
+      if (next !== 'active') return;
+      void Promise.all([loadConfig(), loadAutomationSettings()]).then(
+        ([nextConfig, nextAutomation]) => {
+          setConfig(nextConfig);
+          setAutomation(nextAutomation);
+          void refreshFreeboxWidget();
+        },
+      );
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
+  }, []);
+
   const updateConfig = useCallback(async (partial: Partial<FreeboxConfig>) => {
     setConfig((prev) => {
       const next = { ...prev, ...partial };
@@ -170,6 +189,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         } else {
           setLastAutomationWarning(null);
         }
+        void refreshFreeboxWidget();
         return result;
       } catch (error) {
         const warning =
@@ -177,6 +197,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             ? error.message
             : 'Échec démarrage automatisation';
         setLastAutomationWarning(warning);
+        void refreshFreeboxWidget();
         return { ok: false, warning };
       }
     },
@@ -194,6 +215,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    void refreshFreeboxWidget();
   }, []);
 
   const clearAutomationWarning = useCallback(() => {

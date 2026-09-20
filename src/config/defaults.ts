@@ -26,7 +26,10 @@ export const STORAGE_KEYS = {
   autoLastRunAt: '@remotetvmamie/autoLastRunAt',
   autoLastStatus: '@remotetvmamie/autoLastStatus',
   httpLogs: '@remotetvmamie/httpLogs',
+  widgetStatus: '@remotetvmamie/widgetStatus',
 } as const;
+
+export const FREEBOX_WIDGET_NAME = 'FreeboxRemote';
 
 export const SMART_START_BACKGROUND_TASK = 'SMART_START_BACKGROUND_TASK';
 export const SMART_START_FOREGROUND_TASK = 'SMART_START_FOREGROUND_TASK';

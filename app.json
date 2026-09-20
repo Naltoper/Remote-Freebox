@@ -74,7 +74,26 @@
           "color": "#e8a317"
         }
       ],
-      "expo-clipboard"
+      "expo-clipboard",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "FreeboxRemote",
+              "label": "Freebox Remote",
+              "description": "Démarrage intelligent et bascule de l’automatisation",
+              "minWidth": "140dp",
+              "minHeight": "140dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/images/logoMoumouMatrix.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ]
   }
 }
