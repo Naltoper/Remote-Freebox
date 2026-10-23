@@ -9,6 +9,7 @@ const FGS_PERMISSIONS = [
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.WAKE_LOCK',
   'android.permission.RECEIVE_BOOT_COMPLETED',
+  'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
 ];
 
 const SERVICE_CANDIDATES = [

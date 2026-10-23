@@ -135,3 +135,17 @@ export async function syncAutomationRuntime(
 export function isForegroundServiceRunning(): boolean {
   return isInProcessSchedulerRunning();
 }
+
+/** iOS / web: no FGS — ensure in-process scheduler if automation is enabled. */
+export async function ensureForegroundServiceAlive(): Promise<boolean> {
+  try {
+    const automation = await loadAutomationSettings();
+    if (!automation.enabled) return false;
+    if (isInProcessSchedulerRunning()) return true;
+    await startInProcessScheduler();
+    return true;
+  } catch (error) {
+    console.warn('[SmartStart] ensureForegroundServiceAlive failed', error);
+    return false;
+  }
+}

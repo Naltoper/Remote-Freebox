@@ -8,7 +8,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import {
+  AppState,
+  Linking,
+  Platform,
+  type AppStateStatus,
+} from 'react-native';
 
 import {
   DEFAULT_AUTOMATION,
@@ -16,10 +21,15 @@ import {
   STORAGE_KEYS,
 } from '../config/defaults';
 import {
+  isBootRelaunchUrl,
+  sendAppToBackground,
+} from '../services/androidKeepAlive';
+import {
   loadAutomationSettings,
   persistAutomationSettings,
 } from '../services/automation';
 import {
+  ensureForegroundServiceAlive,
   syncAutomationRuntime,
   type AutomationRuntimeResult,
 } from '../services/backgroundAutomation';
@@ -130,15 +140,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         if (nextAutomation.enabled) {
           bootTimer = setTimeout(() => {
-            void syncAutomationRuntime(true)
-              .then((result) => {
+            void (async () => {
+              try {
+                const result = await syncAutomationRuntime(true);
                 if (!cancelled && result.warning) {
                   setLastAutomationWarning(result.warning);
                 }
-              })
-              .catch((error) => {
+
+                // After reboot, BootReceiver opens the app via deep link —
+                // send UI to background once FGS is up (Android 15-safe path).
+                if (Platform.OS === 'android') {
+                  const initialUrl = await Linking.getInitialURL();
+                  if (isBootRelaunchUrl(initialUrl)) {
+                    await sendAppToBackground();
+                  }
+                }
+              } catch (error) {
                 console.warn('[Settings] boot automation sync failed', error);
-              });
+              }
+            })();
           }, 1500);
         }
       })
@@ -153,14 +173,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Keep in sync when the home-screen widget toggles automation while the app sleeps.
+  // Also revive the FGS if Android killed it while we were backgrounded.
   useEffect(() => {
     const onAppState = (next: AppStateStatus) => {
       if (next !== 'active') return;
       void Promise.all([loadConfig(), loadAutomationSettings()]).then(
-        ([nextConfig, nextAutomation]) => {
+        async ([nextConfig, nextAutomation]) => {
           setConfig(nextConfig);
           setAutomation(nextAutomation);
           void refreshFreeboxWidget();
+          if (nextAutomation.enabled) {
+            const alive = await ensureForegroundServiceAlive();
+            if (!alive) {
+              const result = await syncAutomationRuntime(true);
+              if (result.warning) {
+                setLastAutomationWarning(result.warning);
+              }
+            }
+          }
         },
       );
     };

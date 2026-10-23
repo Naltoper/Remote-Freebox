@@ -12,6 +12,7 @@ import {
   isInTimeWindow,
   parseHmToMinutes,
 } from '../utils/timeWindow';
+import { notifyAutomationFailure } from './automationAlerts';
 import { runSmartStart, type SmartStartProgress } from './freeboxRemote';
 
 let automationRunLock = false;
@@ -164,11 +165,15 @@ export async function runScheduledAutomation(
       ? 'Plage active — démarrage intelligent terminé'
       : `Plage active — échec: ${'error' in result ? result.error : 'inconnu'}`;
     await writeAutomationStatus(message);
+    if (!result.ok) {
+      void notifyAutomationFailure(message);
+    }
     return { ranMacro: true, inWindow: true, message };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Erreur automatisation';
     await writeAutomationStatus(message);
+    void notifyAutomationFailure(message);
     return { ranMacro: false, inWindow: false, message };
   } finally {
     automationRunLock = false;

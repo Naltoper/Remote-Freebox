@@ -56,10 +56,13 @@ async function persist(entries: HttpLogEntry[]): Promise<void> {
 
 export function formatLogTime(timestamp: number): string {
   const d = new Date(timestamp);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
+  return `${dd}/${mo}/${yyyy} ${hh}:${mm}:${ss}`;
 }
 
 export function labelForKind(kind: HttpLogKind): string {

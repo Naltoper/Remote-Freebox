@@ -19,7 +19,11 @@ import {
   STORAGE_KEYS,
 } from '../config/defaults';
 import { useSettings } from '../context/SettingsContext';
-import { isForegroundServiceRunning } from '../services/backgroundAutomation';
+import { requestIgnoreBatteryOptimizations } from '../services/androidKeepAlive';
+import {
+  ensureForegroundServiceAlive,
+  isForegroundServiceRunning,
+} from '../services/backgroundAutomation';
 import { colors } from '../theme/colors';
 import { getNextAutomationInfo } from '../utils/timeWindow';
 
@@ -96,9 +100,18 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
   }, [autoEnabled, windowStart, windowEnd, intervalMinutes, automation, tick]);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    const id = setInterval(() => {
+      setTick((n) => n + 1);
+      if (Platform.OS === 'android' && autoEnabled) {
+        void ensureForegroundServiceAlive().then(() => {
+          setFgRunning(isForegroundServiceRunning());
+        });
+      } else {
+        setFgRunning(isForegroundServiceRunning());
+      }
+    }, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [autoEnabled]);
 
   const handleSave = async () => {
     if (saving) return;
@@ -297,6 +310,29 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
             </Text>
           ) : null}
 
+          {Platform.OS === 'android' && autoEnabled ? (
+            <View style={styles.batteryBox}>
+              <Text style={styles.hint}>
+                Sur Pixel : autorisez l’app à tourner sans restriction batterie
+                (Batterie → Non restreinte) pour éviter qu’Android tue le
+                service en arrière-plan.
+              </Text>
+              <Pressable
+                onPress={() => {
+                  void requestIgnoreBatteryOptimizations();
+                }}
+                style={({ pressed }) => [
+                  styles.batteryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.batteryBtnText}>
+                  Autoriser l’exécution en arrière-plan
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           <Pressable
             onPress={handleSave}
             disabled={saving}
@@ -433,6 +469,22 @@ const styles = StyleSheet.create({
   statusLine: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  batteryBox: {
+    gap: 10,
+  },
+  batteryBtn: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(232, 163, 23, 0.12)',
+  },
+  batteryBtnText: {
+    color: colors.accent,
+    fontWeight: '700',
+    fontSize: 14,
   },
   primaryBtn: {
     marginTop: 8,

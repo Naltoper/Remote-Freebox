@@ -13,6 +13,7 @@ import {
   loadAutomationSettings,
   runScheduledAutomation,
 } from './automation';
+import { ensureErrorChannel } from './automationAlerts';
 import {
   startInProcessScheduler,
   stopInProcessScheduler,
@@ -34,6 +35,8 @@ if (!globalThis.__smartStartTaskDefined) {
     TaskManager.defineTask(SMART_START_BACKGROUND_TASK, async () => {
       try {
         await runScheduledAutomation();
+        // Best-effort: restart FGS if the OS killed it (may fail while backgrounded).
+        await ensureForegroundServiceAlive();
         return BackgroundTask.BackgroundTaskResult.Success;
       } catch (error) {
         console.warn('[SmartStart] background task failed', error);
@@ -101,6 +104,7 @@ async function ensureNotificationReady(): Promise<{
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       },
     );
+    await ensureErrorChannel();
 
     const current = await Notifications.getPermissionsAsync();
     let status = current.status;
@@ -289,6 +293,25 @@ export function isForegroundServiceRunning(): boolean {
   try {
     return BackgroundService.isRunning();
   } catch {
+    return false;
+  }
+}
+
+/**
+ * If automation is enabled but the FGS died, try to start it again.
+ * Safe to call from AppState / Settings / background task — never throws.
+ */
+export async function ensureForegroundServiceAlive(): Promise<boolean> {
+  try {
+    if (Platform.OS !== 'android') return false;
+    const automation = await loadAutomationSettings();
+    if (!automation.enabled) return false;
+    if (BackgroundService.isRunning()) return true;
+
+    const fg = await startAndroidForegroundService();
+    return fg.started;
+  } catch (error) {
+    console.warn('[SmartStart] ensureForegroundServiceAlive failed', error);
     return false;
   }
 }

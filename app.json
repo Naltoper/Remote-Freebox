@@ -36,6 +36,7 @@
         "INTERNET",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_DATA_SYNC",
         "POST_NOTIFICATIONS"
@@ -65,6 +66,7 @@
       ],
       "./plugins/withCleartextTraffic.js",
       "./plugins/withForegroundService.js",
+      "./plugins/withBootReceiver.js",
       "./plugins/withNotificationNoChronometer.js",
       "expo-background-task",
       [
@@ -93,6 +95,12 @@
           ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "17f4a32d-c350-4d23-97df-8f104e3328b0"
+      }
+    },
+    "owner": "naltoper"
   }
 }
