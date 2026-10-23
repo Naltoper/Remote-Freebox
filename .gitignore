@@ -42,3 +42,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Android bug reports (device dumps — do not commit)
+bugreport*/

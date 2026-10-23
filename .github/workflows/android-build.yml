@@ -28,7 +28,17 @@ jobs:
         run: npm ci
 
       - name: Prebuild Expo Native Code
-        run: npx expo prebuild --platform android
+        run: npx expo prebuild --platform android --clean
+
+      - name: Verify BootReceiver was generated
+        run: |
+          set -euo pipefail
+          BR="android/app/src/main/java/com/naltoper/remotefreebox/BootReceiver.java"
+          MF="android/app/src/main/AndroidManifest.xml"
+          test -f "$BR" || { echo "Missing BootReceiver.java after prebuild"; exit 1; }
+          grep -q 'com.naltoper.remotefreebox.BootReceiver' "$MF" \
+            || { echo "BootReceiver missing from AndroidManifest.xml"; exit 1; }
+          echo "BootReceiver OK"
 
       - name: Build Android APK
         run: |
